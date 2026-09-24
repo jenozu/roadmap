@@ -1,4 +1,4 @@
-import { parseRoadmap, type Voyage } from "./roadmap";
+import { parseRoadmap, type Voyage } from "./roadmap.ts";
 
 export type Project = { id: string; name: string; repo: string; branch: string; path: string };
 export type CommitActivity = { id: string; message: string; author: string; date: string; url: string };

@@ -59,7 +59,7 @@ export default function Dashboard() {
   const [addError, setAddError] = useState("");
   const mapViewport = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
-  const justMoved = useRef(false);
+  const positionsRef = useRef<Record<string, Location>>({});
 
   useEffect(() => {
     try {
@@ -100,8 +100,10 @@ export default function Dashboard() {
           ? previous : (body.voyage.islands.find(i => i.progress < 100)?.id || body.voyage.islands[0]?.id || null));
         try {
           const saved = localStorage.getItem(layoutPrefix + active.repo);
-          setPositions(saved ? JSON.parse(saved) as Record<string, Location> : {});
-        } catch { setPositions({}); }
+          const savedPositions = saved ? JSON.parse(saved) as Record<string, Location> : {};
+          positionsRef.current = savedPositions;
+          setPositions(savedPositions);
+        } catch { positionsRef.current = {}; setPositions({}); }
       })
       .catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Import failed."); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -168,7 +170,6 @@ export default function Dashboard() {
       scroll: mapViewport.current.scrollLeft,
       moved: false
     };
-    justMoved.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
@@ -179,17 +180,18 @@ export default function Dashboard() {
     const dy = event.clientY - gesture.y;
     if (Math.abs(dx) + Math.abs(dy) > 6) gesture.moved = true;
     if (!gesture.moved) return;
-    justMoved.current = true;
     if (gesture.id) {
       const visualWidth = event.currentTarget.getBoundingClientRect().width;
       const multiplier = mapWidth / visualWidth;
-      setPositions(previous => ({
-        ...previous,
-        [gesture.id as string]: {
+      const updated = {
+        ...positionsRef.current,
+        [gesture.id]: {
           x: Math.max(95, Math.min(mapWidth - 95, gesture.origin.x + dx * multiplier)),
           y: Math.max(115, Math.min(600, gesture.origin.y + dy * multiplier))
         }
-      }));
+      };
+      positionsRef.current = updated;
+      setPositions(updated);
     } else {
       mapViewport.current.scrollLeft = gesture.scroll - dx;
     }
@@ -200,13 +202,14 @@ export default function Dashboard() {
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     if (gesture.id && !gesture.moved) setSelected(gesture.id);
     if (gesture.id && gesture.moved) {
-      try { localStorage.setItem(layoutPrefix + active.repo, JSON.stringify(positions)); } catch { /* non-fatal */ }
+      try { localStorage.setItem(layoutPrefix + active.repo, JSON.stringify(positionsRef.current)); } catch { /* non-fatal */ }
     }
     drag.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   function resetLayout() {
+    positionsRef.current = {};
     setPositions({});
     try { localStorage.removeItem(layoutPrefix + active.repo); } catch { /* non-fatal */ }
   }

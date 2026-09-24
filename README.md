@@ -1,13 +1,46 @@
 # Voyages — Project Cartography
 
-A GitHub-connected pirate-map project dashboard. First voyage: [jenozu/trade-alerts](https://github.com/jenozu/trade-alerts), using its existing `phases.md` (13 phases, 793 Markdown checklist boxes in the inspected snapshot).
+A quiet, hand-drawn pirate atlas that turns GitHub Markdown checklists into interactive island journeys. Source code now lives directly in this repository. The first voyage reads the existing `jenozu/trade-alerts` `phases.md` on `main` without editing that project.
 
-## Planned architecture
+## Working MVP source
 
-Next.js + TypeScript, hand-drawn interactive SVG map, GitHub API + verified push webhooks, optional Neon PostgreSQL, multi-project fleet, clickable milestone islands, task detail documents, XP/levels, saved draggable layouts, and reviewable GitHub pull requests for status changes.
+- Next.js 15 + React 19 + TypeScript
+- Interactive, horizontally navigable SVG nautical map with spaced-out islands
+- Draggable island positions saved to this browser
+- Clickable milestone detail panel, quest checklists and links to the exact GitHub source lines
+- Copyable task briefs to hand back to a coding assistant
+- XP/level and measured completion statistics, plus file-specific GitHub commit activity
+- Support for multiple public Markdown roadmap repositories
+- Background rechecking every 90 seconds and manual Sync button
 
-### Source status
+The MVP is **GitHub-to-dashboard read-only**. Two-way edits, signed webhooks, shared Neon persistence and authentication-protected PR creation are explicitly later work. Git commits are shown as activity only, not evidence that unchecked tasks were completed.
 
-The full application has been prepared as a source ZIP pending transfer to this repository. This initial commit contains the roadmap and a one-time, checksummed source bootstrap workflow. **Do not attempt deployment until the source bootstrap completes.** After source transfer, the README will be replaced with the application setup instructions.
+## Setup
 
-The source `trade-alerts` repository is not changed by this setup. Only the new `roadmap` repository is modified.
+Prerequisites: Node.js 22+. In the repo folder run:
+
+```bash
+npm install
+npm test
+npm run lint
+npm run build
+npm run dev
+```
+
+Open http://localhost:3000 and select Trade Alerts. Public repositories require no secrets in the first release.
+
+## Deployment
+
+Connect this repository's `main` branch to Vercel as a Next.js project. Neon is not required for the read-only MVP; it will hold synchronized layouts, activity events and credentials metadata after the protected write-back phase.
+
+## Markdown rules
+
+See `docs/ROADMAP_CONTRACT.md` for the checklist format. The first project's existing canonical source remains `trade-alerts/phases.md`; no conversion or rename is required.
+
+## Security boundary
+
+Do not enable an anonymous write endpoint or put a GitHub personal access token in a public browser bundle. Two-way edits require an authenticated server-side workflow and reviewable GitHub pull requests.
+
+## Roadmap
+
+See `master_plan.md` for staged verification and planned features.

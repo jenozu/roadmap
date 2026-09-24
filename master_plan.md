@@ -1,23 +1,28 @@
 # Voyages — Master Plan
 
-## M1: Project foundation
-- [x] Prepare architecture and inspect first source repository
-- [x] Develop and syntax-check full local application source
-- [x] Create initial GitHub project bootstrap
-- [ ] Transfer the full source snapshot into this repository
-- [ ] Complete dependency installation, tests and production build
-- [ ] Connect Vercel and Neon
+## M1: Working GitHub expedition (current)
+- [x] Inspect trading repository and select canonical phases.md as first voyage source
+- [x] Scaffold Next.js/TypeScript with Markdown parser and public GitHub import endpoint
+- [x] Create interactive hand-drawn nautical SVG islands, clickable detail panel, task brief copying and local layout persistence
+- [x] Add a multi-project selector, manual and timed refresh, truthful GitHub file commit activity
+- [x] Commit source to jenozu/roadmap main (without modifying trade-alerts)
+- [ ] Verify automated tests, typecheck and production build in GitHub Actions
+- [ ] Connect Vercel project, deploy and verify trade-alerts Phase 0–12 live data
 
-## M2: Working expedition
-- [ ] Verify the trading project checklist renders as 13 navigable islands
-- [ ] Configure GitHub token, admin passphrase and signed webhook
-- [ ] Verify map position persistence
-- [ ] Create, review and merge a test checkbox status pull request
-- [ ] Confirm real task event history updates correctly
+## M2: GitHub-backed workflow
+- [ ] Create a Neon PostgreSQL database for user projects, map settings, task snapshots and an event ledger
+- [ ] Configure GitHub App with least-privilege repository access
+- [ ] Implement HMAC-verified webhook delivery and idempotent task event processing
+- [ ] Protect all write operations with admin authentication and CSRF protection
+- [ ] Implement dashboard task editing through reviewable GitHub pull requests
+- [ ] Handle conflicts when source commits change between fetching and editing
+- [ ] Verify live progress across browser sessions and different devices
 
-## M3: Beyond MVP
-- [ ] Configurable task XP and milestone rewards
-- [ ] More map visual templates and achievements
-- [ ] GitHub App installation, CI and optional private-repository authentication
+## M3: Voyage gamification
+- [ ] Introduce stable task IDs and migration helper for new projects
+- [ ] Implement configurable XP weights and award once per unique task completion
+- [ ] Achievement badges, chapter milestone unlocks and subtle ship movement animation
+- [ ] Island illustration templates and polished custom handwritten map assets
+- [ ] Add CI security checks, accessibility and cross-browser interactions
 
-Do not check off work that has not been verified in a running deployment.
+Do not claim deployment, two-way synchronization, stored historical events or verified tests until the corresponding task is actually completed.
