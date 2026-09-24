@@ -39,7 +39,7 @@ export type Voyage = {
   level: number;
 };
 
-const phasePattern = /^#\s+Phase\s+(\d+)\s*[-:—–]\s*(.+)$/i;
+const phasePattern = /^#{1,2}\s+(?:Phase\s+|Milestone\s+|M)(\d+(?:\.\d+)?)\s*[-:—–]\s*(.+)$/i;
 const taskPattern = /^(\s*)[-*]\s+\[([xX ])\]\s+(.+)$/;
 const idPattern = /<!--\s*task:([a-z0-9_-]+)\s*-->/i;
 
@@ -149,7 +149,7 @@ export function parseRoadmap(markdown: string): Voyage {
       continue;
     }
 
-    if (goalSection && text && !text.startsWith(">")) {
+    if (goalSection && text && !text.startsWith(">") && !/^[-*]\s/.test(text)) {
       current.goal = current.goal ? current.goal + " " + text : text;
     }
     if (section) sectionLines.push(line);

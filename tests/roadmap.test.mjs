@@ -74,3 +74,21 @@ test("validates public-repo selectors and prevents path traversal", () => {
   assert.throws(() => validateProject({repo: "jenozu/trade-alerts", path: "../secrets.md"}));
   assert.throws(() => validateProject({repo: "https://example.com/x", path: "a.md"}));
 });
+
+test("supports standardized milestone and nested M1.1 headings", () => {
+  const parsed = parseRoadmap([
+    "# Voyages",
+    "## M1: Project foundation",
+    "## Goal",
+    "Create working import.",
+    "- [x] Initial docs",
+    "## M1.1: Source improvements",
+    "- [ ] Test importer",
+    "## M2 — Deployment",
+    "- [ ] Deploy",
+  ].join("\n"));
+  assert.equal(parsed.islands.length, 3);
+  assert.deepEqual(parsed.islands.map(island => island.number), [1, 1.1, 2]);
+  assert.equal(parsed.taskCount, 3);
+  assert.equal(parsed.islands[0].goal, "Create working import.");
+});

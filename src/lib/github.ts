@@ -46,13 +46,15 @@ export async function fetchProject(projectInput: Partial<Project>): Promise<Proj
     signal: AbortSignal.timeout(12000)
   });
   if (!response.ok) throw new Error("GitHub roadmap could not be loaded (HTTP " + response.status + ").");
+  const declaredSize = Number(response.headers.get("content-length") || 0);
+  if (declaredSize > 750000) throw new Error("The roadmap exceeds the 750 KB import limit.");
   const markdown = await response.text();
-  if (markdown.length > 750000) throw new Error("The roadmap exceeds the 750 KB import limit.");
+  if (new TextEncoder().encode(markdown).byteLength > 750000) throw new Error("The roadmap exceeds the 750 KB import limit.");
   const voyage = parseRoadmap(markdown);
 
   const commitsUrl = "https://api.github.com/repos/" +
     parts.map(encodeURIComponent).join("/") + "/commits?path=" +
-    encodeURIComponent(project.path) + "&per_page=6";
+    encodeURIComponent(project.path) + "&sha=" + encodeURIComponent(project.branch) + "&per_page=6";
   let activity: CommitActivity[] = [];
   try {
     const commitsResponse = await fetch(commitsUrl, {
@@ -66,7 +68,7 @@ export async function fetchProject(projectInput: Partial<Project>): Promise<Proj
         html_url: string;
         commit: { message: string; author: { name: string; date: string } | null };
       }>;
-      activity = json.map(item => ({
+      activity = (Array.isArray(json) ? json : []).slice(0, 6).map(item => ({
         id: item.sha,
         message: item.commit.message.split("\n")[0],
         author: item.commit.author?.name || "Contributor",

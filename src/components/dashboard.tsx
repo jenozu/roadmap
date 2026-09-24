@@ -5,6 +5,7 @@ import { firstProject, type Project, type ProjectSnapshot } from "@/lib/github";
 import type { Island, Task } from "@/lib/roadmap";
 import { layoutForCount, fitMapScale, clampIsland, type Point } from "@/lib/map-layout";
 import IslandSketch from "@/components/island-sketch";
+import { resolveRoadmapHref } from "@/lib/roadmap-links";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -143,7 +144,7 @@ export default function Dashboard() {
   }, []);
 
   const islands = snapshot?.voyage.islands || [];
-  const current = islands.find(i => i.progress < 100)?.number ?? islands[0]?.number ?? -1;
+  const current = islands.find(i => i.tasks.length > 0 && i.progress < 100)?.number ?? islands[0]?.number ?? -1;
   const archipelago = useMemo(() => layoutForCount(islands.length), [islands.length]);
   const { width: mapWidth, height: mapHeight } = archipelago;
   const locations = useMemo(
@@ -315,6 +316,28 @@ export default function Dashboard() {
     requestAnimationFrame(() => fitMap());
   }
 
+  function renderGuide(source: string) {
+    return <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        a: ({ href, children }) => {
+          const resolved = resolveRoadmapHref(active, href);
+          return resolved
+            ? <a href={resolved} target="_blank" rel="noopener noreferrer">{children}</a>
+            : <span>{children}</span>;
+        },
+        img: ({ src, alt }) => {
+          // External embedded images can track readers of imported roadmaps.
+          // Link to the source instead of automatically loading them.
+          const resolved = resolveRoadmapHref(active, src);
+          return resolved
+            ? <a href={resolved} target="_blank" rel="noopener noreferrer">View illustration: {alt || "Image"} ↗</a>
+            : <span>Image reference unavailable</span>;
+        }
+      }}
+    >{source}</ReactMarkdown>;
+  }
+
   async function copyBrief(task: Task) {
     if (!selectedIsland) return;
     const lines = [
@@ -394,7 +417,7 @@ export default function Dashboard() {
               <button type="button" aria-label="Zoom in" onClick={() => changeZoom(.14)}>＋</button>
               <button type="button" onClick={fitMap}>Whole map</button>
               <button type="button" disabled={!islands.length} onClick={() => {
-                const next = islands.find(island => island.progress < 100) || islands[0];
+                const next = islands.find(island => island.tasks.length > 0 && island.progress < 100) || islands[0];
                 if (next) focusOnIsland(next.id);
               }}>Find my ship</button>
               <select className="island-jump" aria-label="Navigate to an island" defaultValue="" key={active.repo + islands.length}
@@ -494,7 +517,7 @@ export default function Dashboard() {
           </article>
           <article className="paper-card">
             <div className="card-heading"><div><small className="eyebrow">YOUR NEXT LANDFALL</small><h2>Upcoming quests</h2></div></div>
-            {islands.filter(i => i.progress < 100).slice(0, 3).map(island => (
+            {islands.filter(i => i.tasks.length > 0 && i.progress < 100).slice(0, 3).map(island => (
               <button className="next-island" key={island.id} onClick={() => selectIsland(island.id)}>
                 <span className="quest-stamp">✧</span><span><strong>{island.name}</strong><small>{island.tasks.length - island.completed} quests remaining · {island.progress}% charted</small></span><b>↗</b>
               </button>
@@ -563,13 +586,13 @@ export default function Dashboard() {
                   {task.instructions.length > 0 ? <>
                     <h4>Instructions for this quest</h4>
                     <div className="markdown-guide">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.instructions.join("\n")}</ReactMarkdown>
+                      {renderGuide(task.instructions.join("\n"))}
                     </div>
                   </> : <p className="detail-disclosure">The roadmap does not contain separate step-by-step instructions specifically for this quest. The following section work plan and source notes are provided as context.</p>}
                   {guide?.notes && <div className="detail-block">
                     <h4>{guide.title === "Overview" ? "Roadmap context" : guide.title + " — source notes"}</h4>
                     <div className="markdown-guide">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{guide.notes}</ReactMarkdown>
+                      {renderGuide(guide.notes)}
                     </div>
                   </div>}
                   {relatedTasks.length > 1 && <div className="detail-block">
