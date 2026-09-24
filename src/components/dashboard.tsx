@@ -6,6 +6,7 @@ import type { Island, Task } from "@/lib/roadmap";
 import { layoutForCount, fitMapScale, clampIsland, type Point } from "@/lib/map-layout";
 import IslandSketch from "@/components/island-sketch";
 import { resolveRoadmapHref } from "@/lib/roadmap-links";
+import { captureProgress, diffProgress, type ProgressChange, type ProgressState } from "@/lib/progress-diff";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -22,6 +23,8 @@ type Drag = {
 };
 const fleetKey = "voyages:projects:v1";
 const layoutPrefix = "voyages:archipelago-layout:v2:";
+const progressPrefix = "voyages:recorded-progress:v1:";
+const historyPrefix = "voyages:observed-task-events:v1:";
 function progressStatus(island: Island, firstOpen: number): "complete" | "current" | "charted" {
   if (island.tasks.length && island.progress === 100) return "complete";
   if (island.number === firstOpen) return "current";
@@ -49,6 +52,8 @@ export default function Dashboard() {
   const [snapshot, setSnapshot] = useState<ProjectSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [recentChanges, setRecentChanges] = useState<ProgressChange[]>([]);
+  const [copiedNotice, setCopiedNotice] = useState<{ id: string; ok: boolean } | null>(null);
   const [tick, setTick] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [questsOpen, setQuestsOpen] = useState(false);
@@ -124,6 +129,24 @@ export default function Dashboard() {
       .then(body => {
         if (controller.signal.aborted) return;
         setSnapshot(body);
+        // Local history records when changes were detected, never the date
+        // the associated work actually happened. GitHub is the source.
+        try {
+          const key = body.project.repo + "@" + body.project.branch + "/" + body.project.path;
+          const now = captureProgress(body.voyage, body.updatedAt);
+          const priorText = localStorage.getItem(progressPrefix + key);
+          const previous = priorText ? JSON.parse(priorText) as ProgressState : undefined;
+          const incoming = previous && Array.isArray(previous.rows)
+            ? diffProgress(previous, now) : [];
+          const historyText = localStorage.getItem(historyPrefix + key);
+          const existing = historyText ? JSON.parse(historyText) as ProgressChange[] : [];
+          const history = [...incoming.reverse(), ...(Array.isArray(existing) ? existing : [])].slice(0, 30);
+          localStorage.setItem(progressPrefix + key, JSON.stringify(now));
+          localStorage.setItem(historyPrefix + key, JSON.stringify(history));
+          setRecentChanges(history);
+        } catch {
+          setRecentChanges([]);
+        }
         setSelected(previous => body.voyage.islands.some(i => i.id === previous)
           ? previous : (body.voyage.islands.find(i => i.progress < 100)?.id || body.voyage.islands[0]?.id || null));
         try {
@@ -235,6 +258,7 @@ export default function Dashboard() {
     setActiveId(project.id);
     setSnapshot(null);
     setSelected(null);
+    setRecentChanges([]);
     initializedMap.current = "";
     setQuestsOpen(false);
     setShowAdd(false);
@@ -256,7 +280,7 @@ export default function Dashboard() {
   }
 
   function onDown(event: ReactPointerEvent<SVGSVGElement>) {
-    if (!mapViewport.current) return;
+    if (event.button !== 0 || !mapViewport.current) return;
     const element = (event.target as Element).closest("[data-island]");
     const id = element?.getAttribute("data-island") || null;
     const index = islands.findIndex(i => i.id === id);
@@ -309,6 +333,14 @@ export default function Dashboard() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
+  function onCancel(event: ReactPointerEvent<SVGSVGElement>) {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
   function resetLayout() {
     positionsRef.current = {};
     setPositions({});
@@ -355,7 +387,12 @@ export default function Dashboard() {
     }
     const sectionGuide = selectedIsland.sections.find(guide => guide.id === task.sectionId);
     if (sectionGuide?.notes) lines.push("Related section guidance:\n" + sectionGuide.notes);
-    try { await navigator.clipboard.writeText(lines.join("\n")); } catch { /* clipboard may be blocked */ }
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopiedNotice({ id: task.id, ok: true });
+    } catch {
+      setCopiedNotice({ id: task.id, ok: false });
+    }
   }
 
   return (
@@ -367,7 +404,7 @@ export default function Dashboard() {
           {projects.map(project => (
             <button key={project.id} type="button"
               className={"project-choice " + (active.id === project.id ? "active" : "")}
-              onClick={() => { initializedMap.current = ""; setActiveId(project.id); setSnapshot(null); setSelected(null); setQuestsOpen(false); }}>
+              onClick={() => { initializedMap.current = ""; setRecentChanges([]); setActiveId(project.id); setSnapshot(null); setSelected(null); setQuestsOpen(false); }}>
               <span className="project-crest">⚓</span>
               <span><strong>{project.name}</strong><small>{project.repo}</small></span>
               {active.id === project.id && <span className="choice-chevron">›</span>}
@@ -432,12 +469,15 @@ export default function Dashboard() {
             </div>
           </div>
           {error && <div className="error-banner">Could not fetch roadmap: {error} <button onClick={() => setTick(t => t + 1)}>Retry</button></div>}
+          {!loading && !error && snapshot && islands.length === 0 && <div className="loading-banner">
+            No islands were found. Your Markdown needs headings such as <code># Phase 0 — Planning</code> or <code>## M1: Planning</code>.
+          </div>}
           {!error && loading && !snapshot && <div className="loading-banner">Unrolling the charts and finding your islands…</div>}
           <div className="map-scroll" ref={mapViewport} tabIndex={0} role="region" aria-label="Pan and zoom the project archipelago">
             <svg className="treasure-map" viewBox={"0 0 " + mapWidth + " " + mapHeight}
               style={{ width: mapWidth * zoom, height: mapHeight * zoom }}
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
-              onPointerCancel={onUp} aria-label="Draggable treasure map of project milestones">
+              onPointerCancel={onCancel} aria-label="Draggable treasure map of project milestones">
               <defs>
                 <pattern id="waves" width="150" height="130" patternUnits="userSpaceOnUse">
                   <path d="M12 35q11 -6 23 0m24 55q11 -6 23 0m61 -60q9 -5 20 0" fill="none" stroke="#5b756c" strokeWidth="1" opacity=".23" />
@@ -510,6 +550,17 @@ export default function Dashboard() {
         <section className="below-grid">
           <article className="paper-card">
             <div className="card-heading"><div><small className="eyebrow">THE SHIP&apos;S LOG</small><h2>Recent chart updates</h2></div><a href={"https://github.com/" + active.repo + "/commits/" + encodeURIComponent(active.branch) + "/" + active.path} target="_blank" rel="noreferrer">GitHub ↗</a></div>
+            {recentChanges.length > 0 && <div className="local-activity">
+              <strong>Checklist changes detected since earlier visits</strong>
+              {recentChanges.slice(0, 5).map((change, index) =>
+                <div key={change.detectedAt + change.key + index} className="activity">
+                  <div className="activity-bullet" aria-hidden="true">{change.kind === "completed" ? "✓" : "↺"}</div>
+                  <div><span className="task-change-title">{change.kind === "completed" ? "Quest completed" : "Quest reopened"}: {change.title}</span>
+                    <small>{change.phase} · Detected {timeAgo(change.detectedAt)}</small></div>
+                </div>
+              )}
+              <p className="subtle-note">Saved in this browser when GitHub synchronization detects a checkbox change. Detection time is not commit time.</p>
+            </div>
             {snapshot?.activity.length ? snapshot.activity.map(item => <div className="activity" key={item.id}>
               <div className="activity-bullet">✦</div><div><a href={item.url} target="_blank" rel="noreferrer">{item.message}</a><small>{item.author} · {timeAgo(item.date)}</small></div>
             </div>) : <p className="empty-note">Roadmap commit history will appear here when GitHub is available.</p>}
@@ -623,7 +674,9 @@ export default function Dashboard() {
                   </div>}
                   <div className="task-links expanded-links">
                     <a target="_blank" rel="noreferrer" href={projectFileUrl + "#L" + task.line}>Open exact source ↗</a>
-                    <button type="button" onClick={() => void copyBrief(task)}>Copy task brief</button>
+                    <button type="button" onClick={() => void copyBrief(task)}>
+                      {copiedNotice?.id === task.id ? (copiedNotice.ok ? "Copied to clipboard ✓" : "Copy unavailable — use source link") : "Copy task brief"}
+                    </button>
                   </div>
                 </div>}
               </div>;
