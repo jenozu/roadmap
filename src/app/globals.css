@@ -112,3 +112,74 @@
 .local-activity .activity-bullet{color:#526f4e}
 .task-change-title{font:12px/1.4 Arial,sans-serif;color:#3d5145}
 .local-activity .subtle-note{margin-bottom:0}
+
+
+/* Immersive atlas viewport: render the SVG as a camera-transformed world
+   instead of relying on scrollbars. The map can pan even at Whole Map zoom. */
+.map-scroll {
+  position:relative;
+  overflow:hidden;
+  cursor:grab;
+  touch-action:none;
+  user-select:none;
+  background-color:#d9d1ad;
+  background-image:
+    radial-gradient(ellipse at 24% 35%, #f1e9c746 0%, transparent 62%),
+    radial-gradient(ellipse at 77% 69%, #9aaf9544 0%, transparent 64%),
+    repeating-linear-gradient(0deg, transparent 0 120px, #776f4d19 121px, transparent 122px);
+}
+.map-scroll:active { cursor:grabbing; }
+.map-scroll:focus-visible { outline:3px solid #3e7788; outline-offset:-3px; }
+.map-scroll .treasure-map {
+  position:absolute;top:0;left:0;
+  margin:0; margin-inline:0;
+  transform-origin:0 0;
+  will-change:transform;
+  max-width:none;
+}
+.map-island, .map-island * { cursor:move; }
+.map-actions .fullscreen-toggle {
+  padding:0 12px;
+  min-height:31px;
+  border-color:#29463f;
+  background:#29463f;
+  color:#faf1d6;
+  font-weight:600;
+}
+.map-actions .fullscreen-toggle:hover { background:#3c5d50; }
+/* Fixed full-window mode covers project stats, sidebar and page chrome, while
+   keeping the separate quest tab/drawer available above the map. */
+.atlas-panel.atlas-fullscreen {
+  position:fixed;
+  inset:0;
+  z-index:44;
+  display:flex;
+  flex-direction:column;
+  width:100vw;
+  height:100dvh;
+  margin:0;
+  background:#d9d1ad;
+  box-shadow:none;
+  border:0;
+}
+.atlas-fullscreen .atlas-top {
+  flex:none;
+  min-height:74px;
+  padding:12px 24px;
+  gap:14px;
+}
+.atlas-fullscreen .map-scroll {
+  flex:1 1 auto;
+  height:auto;
+  min-height:0;
+}
+.atlas-fullscreen .map-bottom {
+  flex:none;
+  padding:9px 20px;
+  min-height:38px;
+}
+@media(max-width:760px) {
+  .atlas-fullscreen .atlas-top{padding:9px 12px;max-height:35vh;overflow-y:auto;}
+  .atlas-fullscreen .atlas-top h2{font-size:19px;}
+  .atlas-fullscreen .map-bottom{font-size:10px;padding:7px 11px;}
+}
