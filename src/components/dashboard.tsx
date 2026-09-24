@@ -21,7 +21,7 @@ type Drag = {
 };
 const fleetKey = "voyages:projects:v1";
 const layoutPrefix = "voyages:archipelago-layout:v2:";
-function progressStatus(island: Island, firstOpen: number): string {
+function progressStatus(island: Island, firstOpen: number): "complete" | "current" | "charted" {
   if (island.tasks.length && island.progress === 100) return "complete";
   if (island.number === firstOpen) return "current";
   return "charted";
