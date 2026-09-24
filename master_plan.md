@@ -33,7 +33,8 @@
 - [x] Open new voyages at a legible zoom centered on the first unfinished island; preserve world position while toggling full window
 - [x] Support wheel/trackpad travel, Ctrl+wheel zoom, keyboard arrow panning and zoom-around-center controls
 - [x] Add focused camera unit tests for panning, fit, anchored zoom and resize behavior
-- [ ] Verify fullscreen, touch dragging and mouse pan in a live Vercel browser across screen sizes
+- [x] Run automated Chromium interaction tests covering full-window view, whole-map panning and draggable islands (GitHub Actions 36051940319 passed)
+- [ ] Visually inspect the latest Vercel deployment and manually verify touch dragging on physical mobile devices
 
 ## M2: GitHub-backed workflow
 - [ ] Create a Neon PostgreSQL database for user projects, map settings, task snapshots and an event ledger
