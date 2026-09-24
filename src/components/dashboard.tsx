@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { firstProject, type Project, type ProjectSnapshot } from "@/lib/github";
 import type { Island, Task } from "@/lib/roadmap";
 import { layoutForCount, fitMapScale, clampIsland, type Point } from "@/lib/map-layout";
+import IslandSketch from "@/components/island-sketch";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -458,12 +459,7 @@ export default function Dashboard() {
                     onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectIsland(island.id); } }}
                     className={"map-island " + status + (chosen ? " chosen" : "")}>
                     {chosen && <ellipse rx="91" ry="74" cy="-1" fill="none" stroke="#7c5734" strokeWidth="1.4" strokeDasharray="4 7" />}
-                    <path d="M-76 4 Q-62 -15 -44 -12 Q-30 -38 -10 -30 Q2 -49 23 -32 Q49 -34 58 -12 Q84 -10 77 14 Q70 31 50 33 Q30 49 11 36 Q-7 51 -33 34 Q-63 38 -76 4Z"
-                      fill={status === "complete" ? "#a9b292" : status === "current" ? "#d3b77e" : "#c7b891"} stroke="#4e4934" strokeWidth="2" />
-                    <path d="M-70 8 Q-45 -8 -26 14 T19 10 T70 15 M-48 24 Q-17 30 10 17" fill="none" stroke="#7a7353" opacity=".55" strokeWidth="1" />
-                    <path d="M-31 -6L-19 -35L-8 -8L7 -42L26 -7 M-26 -7L-19 -17L-15 -10 M6 -8L8 -20L14 -11" fill="none" stroke="#544d39" strokeWidth="1.5" strokeLinejoin="round" />
-                    <path d="M40 4v-18m0 3l-13 -7m13 7l14-9m-14 9l-6 -12" stroke="#504b35" fill="none" strokeWidth="2" />
-                    <circle cx="40" cy="-26" r="4" fill="#777b5c" />
+                    <IslandSketch variant={index} state={status} isFinal={index === islands.length - 1} />
                     {status === "complete" && <g transform="translate(0 -53)"><circle r="19" fill="#496c50" stroke="#eee8c9" strokeWidth="3" /><path d="m-9 0 7 7 13-15" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></g>}
                     {status === "current" && <g transform="translate(0 -57)"><path d="M0 -25C-34 -25 -33 13 0 35C33 13 34 -25 0 -25Z" fill="#3e7788" stroke="#f4e8c7" strokeWidth="3" /><circle cy="-5" r="7" fill="#f4e8c7" /></g>}
                     {status === "charted" && <g transform="translate(0 -54)"><circle r="15" fill="#6f6b55" stroke="#e9d8ac" strokeWidth="2" /><text textAnchor="middle" dy="6" fontSize="20" fill="#fff0cb">?</text></g>}

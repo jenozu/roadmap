@@ -74,3 +74,26 @@
   .drawer-fixed h2{font-size:23px}
 }
 @media(prefers-reduced-motion:reduce){.quest-edge-tab{transition:none}}
+
+/* 2D archipelago: the map is a viewport rather than a long page-height SVG.
+   Pointer-drag pans in both directions; trackpads can scroll naturally. */
+.map-scroll{
+  height:min(69vh,740px);
+  min-height:520px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  background-color:#d8cfad;
+}
+.treasure-map{touch-action:none}
+.island-jump{
+  min-width:144px;max-width:225px;min-height:31px;
+  padding:5px 8px;border:1px solid #c8bca3;border-radius:3px;
+  background:#f7f3e7;color:#554b39;font:11px Arial,sans-serif;
+}
+.map-actions{row-gap:7px}
+.map-actions button:disabled{opacity:.45}
+.map-sea-title,.map-sea-subtitle{pointer-events:none}
+@media(max-width:760px){
+  .map-scroll{height:min(62vh,580px);min-height:365px}
+  .island-jump{max-width:170px}
+}
