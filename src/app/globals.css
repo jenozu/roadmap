@@ -100,3 +100,15 @@
 
 /* Center the chart when its full overview fits inside the map viewport. */
 .map-scroll .treasure-map{margin-inline:auto}
+
+.local-activity{
+  border:1px solid #d8c6a5;
+  border-left:3px solid #647d60;
+  padding:11px 13px;margin:0 0 17px;
+  background:#f6f1e3;
+}
+.local-activity>strong{display:block;font:12px Georgia,serif;color:#375347;margin-bottom:4px}
+.local-activity .activity{padding:8px 0}
+.local-activity .activity-bullet{color:#526f4e}
+.task-change-title{font:12px/1.4 Arial,sans-serif;color:#3d5145}
+.local-activity .subtle-note{margin-bottom:0}

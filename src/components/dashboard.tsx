@@ -91,6 +91,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     setExpandedTask(null);
+    setCopiedNotice(null);
     savedQuestScrollTop.current = 0;
     if (questScroll.current) questScroll.current.scrollTop = 0;
   }, [selected, activeId]);
@@ -167,7 +168,7 @@ export default function Dashboard() {
   }, []);
 
   const islands = snapshot?.voyage.islands || [];
-  const current = islands.find(i => i.tasks.length > 0 && i.progress < 100)?.number ?? islands[0]?.number ?? -1;
+  const current = islands.find(i => i.tasks.length > 0 && i.progress < 100)?.number ?? islands[islands.length - 1]?.number ?? -1;
   const archipelago = useMemo(() => layoutForCount(islands.length), [islands.length]);
   const { width: mapWidth, height: mapHeight } = archipelago;
   const locations = useMemo(
@@ -454,7 +455,7 @@ export default function Dashboard() {
               <button type="button" aria-label="Zoom in" onClick={() => changeZoom(.14)}>＋</button>
               <button type="button" onClick={fitMap}>Whole map</button>
               <button type="button" disabled={!islands.length} onClick={() => {
-                const next = islands.find(island => island.tasks.length > 0 && island.progress < 100) || islands[0];
+                const next = islands.find(island => island.tasks.length > 0 && island.progress < 100) || islands[islands.length - 1];
                 if (next) focusOnIsland(next.id);
               }}>Find my ship</button>
               <select className="island-jump" aria-label="Navigate to an island" defaultValue="" key={active.repo + islands.length}
@@ -560,7 +561,7 @@ export default function Dashboard() {
                 </div>
               )}
               <p className="subtle-note">Saved in this browser when GitHub synchronization detects a checkbox change. Detection time is not commit time.</p>
-            </div>
+            </div>}
             {snapshot?.activity.length ? snapshot.activity.map(item => <div className="activity" key={item.id}>
               <div className="activity-bullet">✦</div><div><a href={item.url} target="_blank" rel="noreferrer">{item.message}</a><small>{item.author} · {timeAgo(item.date)}</small></div>
             </div>) : <p className="empty-note">Roadmap commit history will appear here when GitHub is available.</p>}
