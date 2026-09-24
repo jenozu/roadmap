@@ -9,6 +9,11 @@
 - [x] Verify automated tests, typecheck and production build in GitHub Actions (run 36039662540 passed)
 - [ ] Connect Vercel project, deploy and verify trade-alerts Phase 0–12 live data
 
+## M1.1: Quest navigation and source instructions
+- [x] Add a persistent map-side quest panel tab, with independently scrolling panel content
+- [x] Allow expanding any task to inspect actual nested instructions, section source notes, surrounding work items and phase completion criteria
+- [ ] Verify updated task drawer in deployed browser and confirm successful CI deployment
+
 ## M2: GitHub-backed workflow
 - [ ] Create a Neon PostgreSQL database for user projects, map settings, task snapshots and an event ledger
 - [ ] Configure GitHub App with least-privilege repository access

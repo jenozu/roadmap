@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { firstProject, type Project, type ProjectSnapshot } from "@/lib/github";
-import type { Island } from "@/lib/roadmap";
+import type { Island, Task } from "@/lib/roadmap";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Location = { x: number; y: number };
 type Drag = {
@@ -49,6 +51,9 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [tick, setTick] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
+  const [questsOpen, setQuestsOpen] = useState(true);
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const questScroll = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Record<string, Location>>({});
   const [zoom, setZoom] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
@@ -76,6 +81,20 @@ export default function Dashboard() {
       }
     } catch { /* local storage can be unavailable */ }
   }, []);
+
+  useEffect(() => {
+    setExpandedTask(null);
+    if (questScroll.current) questScroll.current.scrollTop = 0;
+  }, [selected, activeId]);
+
+  useEffect(() => {
+    if (!questsOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setQuestsOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [questsOpen]);
 
   const active = projects.find(p => p.id === activeId) || firstProject;
   const load = useCallback(async (signal: AbortSignal) => {
@@ -153,7 +172,21 @@ export default function Dashboard() {
     setActiveId(project.id);
     setSnapshot(null);
     setSelected(null);
+    setQuestsOpen(true);
     setShowAdd(false);
+  }
+
+  function selectIsland(id: string) {
+    setSelected(id);
+    setQuestsOpen(true);
+    setExpandedTask(null);
+  }
+
+  function toggleQuests() {
+    if (!selected && islands.length > 0) {
+      setSelected(islands.find(island => island.progress < 100)?.id || islands[0].id);
+    }
+    setQuestsOpen(open => !open);
   }
 
   function onDown(event: ReactPointerEvent<SVGSVGElement>) {
@@ -200,7 +233,7 @@ export default function Dashboard() {
   function onUp(event: ReactPointerEvent<SVGSVGElement>) {
     const gesture = drag.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (gesture.id && !gesture.moved) setSelected(gesture.id);
+    if (gesture.id && !gesture.moved) selectIsland(gesture.id);
     if (gesture.id && gesture.moved) {
       try { localStorage.setItem(layoutPrefix + active.repo, JSON.stringify(positionsRef.current)); } catch { /* non-fatal */ }
     }
@@ -214,7 +247,7 @@ export default function Dashboard() {
     try { localStorage.removeItem(layoutPrefix + active.repo); } catch { /* non-fatal */ }
   }
 
-  async function copyBrief(task: Island["tasks"][number]) {
+  async function copyBrief(task: Task) {
     if (!selectedIsland) return;
     const lines = [
       "Repository: " + active.repo,
@@ -226,6 +259,11 @@ export default function Dashboard() {
       "Source: " + projectFileUrl + "#L" + task.line,
       "First inspect the current repository. Do not duplicate existing work. Follow project rules and verify changes."
     ];
+    if (task.instructions.length) {
+      lines.push("Task-specific steps from the roadmap:\n" + task.instructions.join("\n"));
+    }
+    const sectionGuide = selectedIsland.sections.find(guide => guide.id === task.sectionId);
+    if (sectionGuide?.notes) lines.push("Related section guidance:\n" + sectionGuide.notes);
     try { await navigator.clipboard.writeText(lines.join("\n")); } catch { /* clipboard may be blocked */ }
   }
 
@@ -287,6 +325,9 @@ export default function Dashboard() {
               <span>{Math.round(zoom * 100)}%</span>
               <button aria-label="Zoom in" onClick={() => setZoom(z => Math.min(1.6, +(z + 0.1).toFixed(2)))}>＋</button>
               <button onClick={resetLayout}>Reset islands</button>
+              <button className="map-quest-toggle" aria-expanded={questsOpen} onClick={toggleQuests}>
+                {questsOpen ? "Hide quests" : "Show quests"}
+              </button>
             </div>
           </div>
           {error && <div className="error-banner">Could not fetch roadmap: {error} <button onClick={() => setTick(t => t + 1)}>Retry</button></div>}
@@ -331,7 +372,7 @@ export default function Dashboard() {
                 return (
                   <g key={island.id} data-island={island.id} transform={"translate(" + pos.x + " " + pos.y + ")"}
                     tabIndex={0} role="button" aria-label={"Island " + island.number + ": " + island.name + ", " + island.progress + "% completed"}
-                    onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(island.id); } }}
+                    onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectIsland(island.id); } }}
                     className={"map-island " + status + (chosen ? " chosen" : "")}>
                     {chosen && <ellipse rx="91" ry="74" cy="-1" fill="none" stroke="#7c5734" strokeWidth="1.4" strokeDasharray="4 7" />}
                     <path d="M-76 4 Q-62 -15 -44 -12 Q-30 -38 -10 -30 Q2 -49 23 -32 Q49 -34 58 -12 Q84 -10 77 14 Q70 31 50 33 Q30 49 11 36 Q-7 51 -33 34 Q-63 38 -76 4Z"
@@ -375,7 +416,7 @@ export default function Dashboard() {
           <article className="paper-card">
             <div className="card-heading"><div><small className="eyebrow">YOUR NEXT LANDFALL</small><h2>Upcoming quests</h2></div></div>
             {islands.filter(i => i.progress < 100).slice(0, 3).map(island => (
-              <button className="next-island" key={island.id} onClick={() => setSelected(island.id)}>
+              <button className="next-island" key={island.id} onClick={() => selectIsland(island.id)}>
                 <span className="quest-stamp">✧</span><span><strong>{island.name}</strong><small>{island.tasks.length - island.completed} quests remaining · {island.progress}% charted</small></span><b>↗</b>
               </button>
             ))}
@@ -384,28 +425,110 @@ export default function Dashboard() {
         </section>
       </main>
 
-      {selectedIsland && <aside className="quest-drawer" aria-label="Selected island tasks">
-        <button className="drawer-close" aria-label="Close task details" onClick={() => setSelected(null)}>×</button>
-        <div className="drawer-eyebrow">ISLAND {String(selectedIsland.number + 1).padStart(2, "0")} · EXPEDITION NOTES</div>
-        <h2>{selectedIsland.name}</h2>
-        <p className="goal">{selectedIsland.goal || "Complete the quests recorded in the canonical project roadmap."}</p>
-        <div className="drawer-summary">
-          <span><strong>{selectedIsland.progress}%</strong> explored</span>
-          <span><strong>{selectedIsland.completed}</strong> / {selectedIsland.tasks.length} quests</span>
+      {islands.length > 0 && <button
+        type="button"
+        className={"quest-edge-tab " + (questsOpen && selectedIsland ? "tab-open" : "tab-closed")}
+        aria-controls="quest-panel"
+        aria-expanded={Boolean(questsOpen && selectedIsland)}
+        aria-label={questsOpen && selectedIsland ? "Hide quest panel" : "Open quest panel"}
+        onClick={toggleQuests}>
+        <span aria-hidden="true" className="quest-tab-symbol">{questsOpen && selectedIsland ? "›" : "‹"}</span>
+        <span>{questsOpen && selectedIsland ? "HIDE QUESTS" : "OPEN QUESTS"}</span>
+      </button>}
+      {questsOpen && selectedIsland && <aside id="quest-panel" className="quest-drawer" aria-label="Selected island quests">
+        <div className="drawer-fixed">
+          <button className="drawer-close" type="button" aria-label="Hide quest panel" onClick={() => setQuestsOpen(false)}>×</button>
+          <div className="drawer-eyebrow">ISLAND {String(selectedIsland.number + 1).padStart(2, "0")} · EXPEDITION NOTES</div>
+          <h2>{selectedIsland.name}</h2>
+          <div className="drawer-summary">
+            <span><strong>{selectedIsland.progress}%</strong> explored</span>
+            <span><strong>{selectedIsland.completed}</strong> / {selectedIsland.tasks.length} quests</span>
+          </div>
+          <div className="drawer-progress"><span style={{ width: selectedIsland.progress + "%" }} /></div>
         </div>
-        <div className="drawer-progress"><span style={{ width: selectedIsland.progress + "%" }} /></div>
-        <div className="drawer-heading"><h3>Quest checklist</h3><a target="_blank" rel="noreferrer" href={projectFileUrl}>Edit source ↗</a></div>
-        <div className="task-list">
-          {selectedIsland.tasks.map(task => <div className={"task " + (task.done ? "task-done" : "")} key={task.id}>
-            <span className="task-check" aria-label={task.done ? "Complete" : "Incomplete"}>{task.done ? "✓" : ""}</span>
-            <div className="task-content"><small>{task.section}</small><p>{task.title}</p><div className="task-links">
-              <a target="_blank" rel="noreferrer" href={projectFileUrl + "#L" + task.line}>Source ↗</a>
-              <button onClick={() => void copyBrief(task)}>Copy task brief</button>
-            </div></div>
-          </div>)}
-          {!selectedIsland.tasks.length && <p className="empty-note">This phase has no checkboxes yet. Add quests to the Markdown file to track it.</p>}
+        <div className="drawer-scroll" ref={questScroll}>
+          <p className="goal">{selectedIsland.goal || "Complete the quests recorded in the canonical project roadmap."}</p>
+          <div className="drawer-heading"><h3>Quest checklist</h3><a target="_blank" rel="noreferrer" href={projectFileUrl}>Edit source ↗</a></div>
+          <p className="quest-tip">Select any quest to see its existing instructions, related section work and completion criteria.</p>
+          <div className="task-list">
+            {selectedIsland.tasks.map(task => {
+              const expanded = expandedTask === task.id;
+              const guide = selectedIsland.sections.find(section => section.id === task.sectionId);
+              const relatedTasks = selectedIsland.tasks.filter(item => item.sectionId === task.sectionId);
+              const doneGuide = selectedIsland.sections.find(section => /^Done when$/i.test(section.title));
+              const criteria = doneGuide && doneGuide.id !== task.sectionId
+                ? selectedIsland.tasks.filter(item => item.sectionId === doneGuide.id)
+                : [];
+              const codeFiles = [...new Set(
+                (task.title + "\n" + task.instructions.join("\n") + "\n" + (guide?.notes || ""))
+                  .match(/\b(?:docs|scripts|src|deploy)\/[a-zA-Z0-9_./-]+\.(?:md|py|sh|service|timer|yml|yaml)\b/g) || []
+              )].slice(0, 12);
+              const asSourceLink = (path: string) => "https://github.com/" + active.repo + "/blob/" + encodeURIComponent(active.branch) + "/" + path;
+              return <div className={"task " + (task.done ? "task-done " : "") + (expanded ? "task-expanded" : "")} key={task.id}>
+                <div className="task-head">
+                  <span className="task-check" aria-label={task.done ? "Complete" : "Incomplete"}>{task.done ? "✓" : ""}</span>
+                  <button
+                    type="button"
+                    className="task-main"
+                    aria-expanded={expanded}
+                    aria-controls={"task-detail-" + task.id}
+                    onClick={() => setExpandedTask(expanded ? null : task.id)}>
+                    <small>{task.section}</small>
+                    <span className="task-label">{task.title}</span>
+                    <span className="task-expand-icon" aria-hidden="true">{expanded ? "−" : "+"}</span>
+                  </button>
+                </div>
+                {expanded && <div id={"task-detail-" + task.id} className="task-detail">
+                  <div className="detail-status">{task.done ? "✓ VERIFIED IN ROADMAP" : "○ NOT YET CHECKED OFF"}</div>
+                  {task.instructions.length > 0 ? <>
+                    <h4>Instructions for this quest</h4>
+                    <div className="markdown-guide">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.instructions.join("\n")}</ReactMarkdown>
+                    </div>
+                  </> : <p className="detail-disclosure">The roadmap does not contain separate step-by-step instructions specifically for this quest. The following section work plan and source notes are provided as context.</p>}
+                  {guide?.notes && <div className="detail-block">
+                    <h4>{guide.title === "Overview" ? "Roadmap context" : guide.title + " — source notes"}</h4>
+                    <div className="markdown-guide">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{guide.notes}</ReactMarkdown>
+                    </div>
+                  </div>}
+                  {relatedTasks.length > 1 && <div className="detail-block">
+                    <h4>Work plan from this section</h4>
+                    <ol className="section-checklist">
+                      {relatedTasks.slice(0, 28).map(item => (
+                        <li key={item.id} className={item.done ? "checked-source" : ""}>
+                          <span className="source-check">{item.done ? "✓" : "○"}</span>
+                          <span>{item.title}</span>
+                        </li>
+                      ))}
+                    </ol>
+                    {relatedTasks.length > 28 && <p className="detail-disclosure">Showing the first 28 items. Open the full section in GitHub to see the rest.</p>}
+                  </div>}
+                  {criteria.length > 0 && <div className="detail-block">
+                    <h4>Phase completion criteria</h4>
+                    <ul className="section-checklist">
+                      {criteria.map(item => <li key={item.id} className={item.done ? "checked-source" : ""}>
+                        <span className="source-check">{item.done ? "✓" : "○"}</span><span>{item.title}</span>
+                      </li>)}
+                    </ul>
+                  </div>}
+                  {codeFiles.length > 0 && <div className="detail-block">
+                    <h4>Referenced project files</h4>
+                    <div className="referenced-files">{codeFiles.map(file =>
+                      <a key={file} href={asSourceLink(file)} target="_blank" rel="noreferrer">{file} ↗</a>
+                    )}</div>
+                  </div>}
+                  <div className="task-links expanded-links">
+                    <a target="_blank" rel="noreferrer" href={projectFileUrl + "#L" + task.line}>Open exact source ↗</a>
+                    <button type="button" onClick={() => void copyBrief(task)}>Copy task brief</button>
+                  </div>
+                </div>}
+              </div>;
+            })}
+            {!selectedIsland.tasks.length && <p className="empty-note">This phase has no checkboxes yet. Add quests to the Markdown file to track it.</p>}
+          </div>
+          <div className="drawer-footer">Instructions are shown from your project's Markdown. To add deeper per-task procedures, include indented steps beneath a checklist item or link a detailed document in the same section. Progress remains read-only until secure GitHub editing is added.</div>
         </div>
-        <div className="drawer-footer">Task status comes from GitHub. Secure two-way editing through reviewable pull requests is the next development stage.</div>
       </aside>}
     </div>
   );

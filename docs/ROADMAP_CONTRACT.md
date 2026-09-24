@@ -38,3 +38,19 @@ The first release reads public repository Markdown. The server never exposes a G
 ## Current product scope
 
 Multiple public projects may be added locally from their owner/repo + branch + Markdown path. Local browser storage keeps the project list and individually dragged island locations. These settings do not sync across devices yet; persistence and signed webhooks belong in the Neon-backed phase.
+
+
+## Quest detail display
+
+Click a quest in its island panel to expand the source-backed instructions. A quest has **task-specific instructions** only when a checklist item has explicitly indented steps beneath it:
+
+    - [ ] Build the webhook receiver <!-- task:T004 -->
+      - Validate GitHub's signed HMAC header
+      - Reject duplicate delivery IDs
+      - Record errors without printing secrets
+
+The UI distinguishes these direct instructions from **section notes** (paragraphs, code blocks and links under the same heading), the **other checklist items in the same section**, and **phase-level Done when criteria**. These neighboring tasks and phase criteria are displayed as context rather than falsely attributed to the clicked task.
+
+Repositories like trade-alerts/phases.md often contain terse checkboxes instead of complete per-task procedures. In that case, the panel states that no specific procedure is recorded and shows the exact surrounding Markdown available. To provide richer instructions, add indented steps or a linked detail document to the source roadmap. The panel renders source Markdown, including code blocks; it does not fabricate instructions.
+
+The quest panel has a fixed side tab for opening and closing even after scrolling a long checklist. Its header is fixed and its list scrolls independently of the map. Press Escape to close it.
