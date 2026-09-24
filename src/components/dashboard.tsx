@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [questsOpen, setQuestsOpen] = useState(true);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const questScroll = useRef<HTMLDivElement>(null);
+  const savedQuestScrollTop = useRef(0);
   const [positions, setPositions] = useState<Record<string, Location>>({});
   const [zoom, setZoom] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
@@ -84,8 +85,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     setExpandedTask(null);
+    savedQuestScrollTop.current = 0;
     if (questScroll.current) questScroll.current.scrollTop = 0;
   }, [selected, activeId]);
+
+  useEffect(() => {
+    if (questsOpen && questScroll.current) {
+      questScroll.current.scrollTop = savedQuestScrollTop.current;
+    }
+  }, [questsOpen]);
 
   useEffect(() => {
     if (!questsOpen) return;
@@ -177,6 +185,8 @@ export default function Dashboard() {
   }
 
   function selectIsland(id: string) {
+    savedQuestScrollTop.current = 0;
+    if (questScroll.current) questScroll.current.scrollTop = 0;
     setSelected(id);
     setQuestsOpen(true);
     setExpandedTask(null);
@@ -446,7 +456,8 @@ export default function Dashboard() {
           </div>
           <div className="drawer-progress"><span style={{ width: selectedIsland.progress + "%" }} /></div>
         </div>
-        <div className="drawer-scroll" ref={questScroll}>
+        <div className="drawer-scroll" ref={questScroll}
+          onScroll={event => { savedQuestScrollTop.current = event.currentTarget.scrollTop; }}>
           <p className="goal">{selectedIsland.goal || "Complete the quests recorded in the canonical project roadmap."}</p>
           <div className="drawer-heading"><h3>Quest checklist</h3><a target="_blank" rel="noreferrer" href={projectFileUrl}>Edit source ↗</a></div>
           <p className="quest-tip">Select any quest to see its existing instructions, related section work and completion criteria.</p>
