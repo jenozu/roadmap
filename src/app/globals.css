@@ -183,3 +183,8 @@
   .atlas-fullscreen .atlas-top h2{font-size:19px;}
   .atlas-fullscreen .map-bottom{font-size:10px;padding:7px 11px;}
 }
+
+/* Keep the inline chart large enough to enjoy before opening full window. */
+.map-scroll{height:min(76vh,880px)}
+@media(max-width:760px){.map-scroll{height:min(68vh,680px)}}
+.atlas-fullscreen .map-scroll{height:auto;}

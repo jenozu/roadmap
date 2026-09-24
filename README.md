@@ -53,3 +53,11 @@ See `master_plan.md` for staged verification and planned features.
 The atlas starts in **Whole map** view with the quest panel closed. Select **Find my ship** to focus on the first unfinished milestone, or **Jump to island** to navigate directly to any stage and open its detailed quests. Drag empty ocean to pan horizontally and vertically, drag island drawings to rearrange your chart, and use +/- to zoom around the visible center. **Reset islands** discards only this project's browser-local custom island positions. The new two-dimensional layout is stored under a v2 browser-storage key; older horizontal layouts are left untouched but not imported automatically.
 
 If a project imports with no islands, check the supported milestone heading format in `docs/ROADMAP_CONTRACT.md`.
+
+## Full-window map and genuine drag navigation
+
+Choose **Full screen** from the atlas toolbar to expand the map over the entire browser viewport, hiding the surrounding project dashboard while keeping the independently toggleable quest drawer. Press **Exit full screen** or Escape to return; when the quest drawer is open, Escape closes it first. The current world location is preserved as the viewport changes size.
+
+The map now uses a **screen-space camera**, not the SVG element's own scrollbars. Drag empty water in any direction to pan **even at Whole map overview scale**, drag an island to change its saved chart position, wheel/trackpad to travel, Ctrl+wheel (trackpad pinch) to zoom at the pointer, and +/- to zoom about the visible center. The normal view starts closer to your first unfinished island so labels aren't microscopic. Whole map remains one click away.
+
+Camera math and overview/resize interactions have dedicated regression tests in `tests/map-camera.test.mjs`; direct visual/browser verification of the Vercel deployment is still a manual check.

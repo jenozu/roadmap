@@ -27,6 +27,14 @@
 - [ ] Introduce a committed dependency lockfile so CI can use reproducible `npm ci`
 - [ ] Consider splitting the large dashboard into separate map, project navigation and quest drawer components
 
+## M1.3: Immersive atlas and navigation repair
+- [x] Implement optional full-window map with the quest drawer available on top
+- [x] Replace scroll-dependent navigation with screen-space panning that works even when the full map fits the viewport
+- [x] Open new voyages at a legible zoom centered on the first unfinished island; preserve world position while toggling full window
+- [x] Support wheel/trackpad travel, Ctrl+wheel zoom, keyboard arrow panning and zoom-around-center controls
+- [x] Add focused camera unit tests for panning, fit, anchored zoom and resize behavior
+- [ ] Verify fullscreen, touch dragging and mouse pan in a live Vercel browser across screen sizes
+
 ## M2: GitHub-backed workflow
 - [ ] Create a Neon PostgreSQL database for user projects, map settings, task snapshots and an event ledger
 - [ ] Configure GitHub App with least-privilege repository access
