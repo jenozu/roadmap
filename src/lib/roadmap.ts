@@ -3,7 +3,18 @@ export type Task = {
   title: string;
   done: boolean;
   section: string;
+  sectionId: string;
   line: number;
+  // Task-specific detail exists only when it is explicitly indented beneath the checkbox.
+  instructions: string[];
+};
+
+export type SectionGuide = {
+  id: string;
+  title: string;
+  line: number;
+  // The original surrounding prose, code examples and references from the roadmap.
+  notes: string;
 };
 
 export type Island = {
@@ -11,6 +22,7 @@ export type Island = {
   number: number;
   name: string;
   goal: string;
+  sections: SectionGuide[];
   tasks: Task[];
   completed: number;
   progress: number;
@@ -28,85 +40,154 @@ export type Voyage = {
 };
 
 const phasePattern = /^#\s+Phase\s+(\d+)\s*[-:—–]\s*(.+)$/i;
-const taskPattern = /^\s*[-*]\s+\[([xX ])\]\s+(.+)$/;
+const taskPattern = /^(\s*)[-*]\s+\[([xX ])\]\s+(.+)$/;
 const idPattern = /<!--\s*task:([a-z0-9_-]+)\s*-->/i;
 
 export function parseRoadmap(markdown: string): Voyage {
   const lines = markdown.split(/\r?\n/);
   const islands: Island[] = [];
   let current: Island | undefined;
-  let section = "General";
-  let readingGoal = false;
-  let inFence = false;
+  let section: SectionGuide | undefined;
+  let sectionLines: string[] = [];
+  let goalSection = false;
+  let activeTask: Task | undefined;
+  let activeIndent = 0;
+  let fence: string | undefined;
   let title = "New voyage";
 
+  function flushSection() {
+    if (section) section.notes = sectionLines.join("\n").trim();
+    sectionLines = [];
+    activeTask = undefined;
+  }
+
   for (let i = 0; i < lines.length; i += 1) {
-    const text = lines[i].trim();
-    if (/^```/.test(text) || /^~~~/.test(text)) {
-      inFence = !inFence;
+    const line = lines[i];
+    const text = line.trim();
+    const fenceMark = text.match(/^(\x60{3,}|~{3,})/);
+    if (fenceMark) {
+      // Keep real code samples visible in the detail panel but never parse
+      // fake example checkboxes or milestone headers from inside a fence.
+      if (!fence) fence = fenceMark[1][0];
+      else if (fence === fenceMark[1][0]) fence = undefined;
+      if (section) sectionLines.push(line);
+      if (activeTask && line.match(/^\s*/)?.[0].length! > activeIndent) {
+        activeTask.instructions.push(line);
+      }
       continue;
     }
-    if (inFence) continue;
+    if (fence) {
+      if (section) sectionLines.push(line);
+      if (activeTask && (line.match(/^\s*/)?.[0].length ?? 0) > activeIndent) {
+        activeTask.instructions.push(line);
+      }
+      continue;
+    }
     if (i === 0 && /^#\s+/.test(text)) title = text.replace(/^#\s+/, "");
-    const match = text.match(phasePattern);
-    if (match) {
+    const phase = text.match(phasePattern);
+    if (phase) {
+      flushSection();
       current = {
-        id: "phase-" + match[1],
-        number: Number(match[1]),
-        name: match[2].trim(),
+        id: "phase-" + phase[1],
+        number: Number(phase[1]),
+        name: phase[2].trim(),
         goal: "",
+        sections: [],
         tasks: [],
         completed: 0,
         progress: 0,
         xp: 0
       };
       islands.push(current);
-      section = "General";
-      readingGoal = false;
+      section = {
+        id: current.id + "-intro",
+        title: "Overview",
+        line: i + 1,
+        notes: ""
+      };
+      current.sections.push(section);
+      goalSection = false;
       continue;
     }
     if (!current) continue;
+
     const heading = text.match(/^#{2,5}\s+(.+)$/);
     if (heading) {
-      section = heading[1].trim();
-      readingGoal = /^goal$/i.test(section);
+      flushSection();
+      const nextTitle = heading[1].trim();
+      section = {
+        id: current.id + "-section-" + current.sections.length,
+        title: nextTitle,
+        line: i + 1,
+        notes: ""
+      };
+      current.sections.push(section);
+      goalSection = /^goal$/i.test(nextTitle);
       continue;
     }
-    if (readingGoal && text && !text.startsWith(">") && !current.goal) {
-      current.goal = text;
-      readingGoal = false;
-    }
-    const task = lines[i].match(taskPattern);
+
+    const task = line.match(taskPattern);
     if (task) {
-      const raw = task[2].trim();
+      const raw = task[3].trim();
       const explicitId = raw.match(idPattern);
       const label = raw.replace(idPattern, "").trim();
-      current.tasks.push({
+      const item: Task = {
         id: explicitId ? explicitId[1] : current.id + "-line-" + (i + 1),
         title: label,
-        done: task[1].toLowerCase() === "x",
-        section,
-        line: i + 1
-      });
+        done: task[2].toLowerCase() === "x",
+        section: section?.title || "Overview",
+        sectionId: section?.id || current.id + "-intro",
+        line: i + 1,
+        instructions: []
+      };
+      if (activeTask && task[1].length > activeIndent) {
+        activeTask.instructions.push(line);
+      }
+      current.tasks.push(item);
+      activeTask = item;
+      activeIndent = task[1].length;
+      continue;
+    }
+
+    if (goalSection && text && !text.startsWith(">")) {
+      current.goal = current.goal ? current.goal + " " + text : text;
+    }
+    if (section) sectionLines.push(line);
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    if (activeTask && text && indent > activeIndent) {
+      activeTask.instructions.push(line);
+    } else if (activeTask && text && indent <= activeIndent) {
+      activeTask = undefined;
+    } else if (activeTask && activeTask.instructions.length && !text) {
+      activeTask.instructions.push("");
     }
   }
+  flushSection();
+
+  // Preserve the order from the file within each milestone and each section.
+  // Only distinct phase numbers are sorted for map routing.
   islands.sort((a, b) => a.number - b.number);
-  let done = 0;
-  let total = 0;
+  let completedCount = 0;
+  let taskCount = 0;
   for (const island of islands) {
-    island.completed = island.tasks.filter(t => t.done).length;
+    for (const task of island.tasks) {
+      task.instructions = task.instructions.map(line => line.replace(/^\s{2}/, "")).join("\n").trim()
+        ? task.instructions.filter((line, index, rows) => line.trim() || (index > 0 && rows[index - 1].trim()))
+        : [];
+    }
+    island.completed = island.tasks.filter(task => task.done).length;
     island.progress = island.tasks.length ? Math.round(island.completed / island.tasks.length * 100) : 0;
     island.xp = island.completed * 10 + (island.tasks.length > 0 && island.completed === island.tasks.length ? 150 : 0);
-    done += island.completed;
-    total += island.tasks.length;
+    completedCount += island.completed;
+    taskCount += island.tasks.length;
   }
   const xp = islands.reduce((sum, island) => sum + island.xp, 0);
   return {
     title,
     islands,
-    taskCount: total,
-    completedCount: done,
-    progress: total ? Math.round(done / total * 100) : 0,
+    taskCount,
+    completedCount,
+    progress: taskCount ? Math.round(completedCount / taskCount * 100) : 0,
     xp,
     level: Math.floor(xp / 500) + 1
   };
