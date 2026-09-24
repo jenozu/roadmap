@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { firstProject, type Project, type ProjectSnapshot } from "@/lib/github";
 import type { Island, Task } from "@/lib/roadmap";
+import { layoutForCount, fitMapScale, clampIsland, type Point } from "@/lib/map-layout";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-type Location = { x: number; y: number };
+type Location = Point;
 type Drag = {
   id: string | null;
   pointerId: number;
@@ -14,14 +15,11 @@ type Drag = {
   y: number;
   origin: Location;
   scroll: number;
+  scrollTop: number;
   moved: boolean;
 };
 const fleetKey = "voyages:projects:v1";
-const layoutPrefix = "voyages:layout:";
-const track = [372, 208, 406, 260, 386, 185, 368, 250, 418, 212, 360, 202, 344];
-function defaultLocation(index: number): Location {
-  return { x: 160 + index * 260, y: track[index % track.length] };
-}
+const layoutPrefix = "voyages:archipelago-layout:v2:";
 function progressStatus(island: Island, firstOpen: number): string {
   if (island.tasks.length && island.progress === 100) return "complete";
   if (island.number === firstOpen) return "current";
@@ -51,12 +49,13 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [tick, setTick] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
-  const [questsOpen, setQuestsOpen] = useState(true);
+  const [questsOpen, setQuestsOpen] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const questScroll = useRef<HTMLDivElement>(null);
   const savedQuestScrollTop = useRef(0);
   const [positions, setPositions] = useState<Record<string, Location>>({});
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(.55);
+  const initializedMap = useRef("");
   const [showAdd, setShowAdd] = useState(false);
   const [newRepo, setNewRepo] = useState("");
   const [newName, setNewName] = useState("");
@@ -144,13 +143,67 @@ export default function Dashboard() {
 
   const islands = snapshot?.voyage.islands || [];
   const current = islands.find(i => i.progress < 100)?.number ?? islands[0]?.number ?? -1;
-  const mapWidth = Math.max(1650, islands.length * 260 + 280);
-  const locations = useMemo(() => islands.map((island, index) => positions[island.id] || defaultLocation(index)), [islands, positions]);
+  const archipelago = useMemo(() => layoutForCount(islands.length), [islands.length]);
+  const { width: mapWidth, height: mapHeight } = archipelago;
+  const locations = useMemo(
+    () => islands.map((island, index) => positions[island.id] || archipelago.points[index]),
+    [islands, positions, archipelago]
+  );
   const journeyPath = inkPath(locations);
   const selectedIsland = islands.find(i => i.id === selected) || null;
   const xp = snapshot?.voyage.xp || 0;
   const currentLevelXp = xp % 500;
   const projectFileUrl = "https://github.com/" + active.repo + "/blob/" + encodeURIComponent(active.branch) + "/" + active.path;
+
+  function fitMap() {
+    const viewport = mapViewport.current;
+    if (!viewport) return;
+    const scale = fitMapScale(viewport.clientWidth, viewport.clientHeight, mapWidth, mapHeight);
+    setZoom(scale);
+    setQuestsOpen(false);
+    requestAnimationFrame(() => { viewport.scrollLeft = 0; viewport.scrollTop = 0; });
+  }
+
+  function changeZoom(amount: number) {
+    const viewport = mapViewport.current;
+    const next = Math.max(.24, Math.min(1.65, +(zoom + amount).toFixed(2)));
+    if (viewport) {
+      const x = (viewport.scrollLeft + viewport.clientWidth / 2) / zoom;
+      const y = (viewport.scrollTop + viewport.clientHeight / 2) / zoom;
+      setZoom(next);
+      requestAnimationFrame(() => {
+        viewport.scrollLeft = x * next - viewport.clientWidth / 2;
+        viewport.scrollTop = y * next - viewport.clientHeight / 2;
+      });
+    } else setZoom(next);
+  }
+
+  function focusOnIsland(id: string, openQuests = false) {
+    const viewport = mapViewport.current;
+    const index = islands.findIndex(island => island.id === id);
+    if (!viewport || index < 0) return;
+    const nextZoom = Math.max(.84, zoom);
+    const point = locations[index];
+    if (openQuests) selectIsland(id);
+    else setQuestsOpen(false);
+    setZoom(nextZoom);
+    requestAnimationFrame(() => {
+      const visibleWidth = Math.max(310, viewport.clientWidth - (openQuests ? Math.min(465, viewport.clientWidth * .45) : 0));
+      viewport.scrollLeft = point.x * nextZoom - visibleWidth / 2;
+      viewport.scrollTop = point.y * nextZoom - viewport.clientHeight / 2;
+    });
+  }
+
+  // First entry to a project presents the complete archipelago. Background
+  // refreshes don't steal the user's location or reset their zoom/pan.
+  useEffect(() => {
+    if (!snapshot || snapshot.project.repo !== active.repo || initializedMap.current === active.repo) return;
+    initializedMap.current = active.repo;
+    const frame = requestAnimationFrame(() => fitMap());
+    return () => cancelAnimationFrame(frame);
+    // The first map view is intentionally initialized only once per repository.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot?.project.repo, active.repo, mapWidth, mapHeight]);
 
   function persistProjects(next: Project[]) {
     setProjects(next);
@@ -180,7 +233,8 @@ export default function Dashboard() {
     setActiveId(project.id);
     setSnapshot(null);
     setSelected(null);
-    setQuestsOpen(true);
+    initializedMap.current = "";
+    setQuestsOpen(false);
     setShowAdd(false);
   }
 
@@ -211,6 +265,7 @@ export default function Dashboard() {
       y: event.clientY,
       origin: index >= 0 ? locations[index] : { x: 0, y: 0 },
       scroll: mapViewport.current.scrollLeft,
+      scrollTop: mapViewport.current.scrollTop,
       moved: false
     };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -228,15 +283,16 @@ export default function Dashboard() {
       const multiplier = mapWidth / visualWidth;
       const updated = {
         ...positionsRef.current,
-        [gesture.id]: {
-          x: Math.max(95, Math.min(mapWidth - 95, gesture.origin.x + dx * multiplier)),
-          y: Math.max(115, Math.min(600, gesture.origin.y + dy * multiplier))
-        }
+        [gesture.id]: clampIsland({
+          x: gesture.origin.x + dx * multiplier,
+          y: gesture.origin.y + dy * multiplier
+        }, mapWidth, mapHeight)
       };
       positionsRef.current = updated;
       setPositions(updated);
     } else {
       mapViewport.current.scrollLeft = gesture.scroll - dx;
+      mapViewport.current.scrollTop = gesture.scrollTop - dy;
     }
   }
 
@@ -255,6 +311,7 @@ export default function Dashboard() {
     positionsRef.current = {};
     setPositions({});
     try { localStorage.removeItem(layoutPrefix + active.repo); } catch { /* non-fatal */ }
+    requestAnimationFrame(() => fitMap());
   }
 
   async function copyBrief(task: Task) {
@@ -286,7 +343,7 @@ export default function Dashboard() {
           {projects.map(project => (
             <button key={project.id} type="button"
               className={"project-choice " + (active.id === project.id ? "active" : "")}
-              onClick={() => { setActiveId(project.id); setSnapshot(null); setSelected(null); }}>
+              onClick={() => { initializedMap.current = ""; setActiveId(project.id); setSnapshot(null); setSelected(null); setQuestsOpen(false); }}>
               <span className="project-crest">⚓</span>
               <span><strong>{project.name}</strong><small>{project.repo}</small></span>
               {active.id === project.id && <span className="choice-chevron">›</span>}
@@ -331,10 +388,20 @@ export default function Dashboard() {
             <div><span className="eyebrow">YOUR CHARTED COURSE</span><h2>The expedition map</h2></div>
             <div className="map-actions">
               <span className="sync-stamp">{snapshot ? "Last checked " + new Date(snapshot.updatedAt).toLocaleTimeString() : "Awaiting chart"}</span>
-              <button aria-label="Zoom out" onClick={() => setZoom(z => Math.max(0.7, +(z - 0.1).toFixed(2)))}>−</button>
+              <button type="button" aria-label="Zoom out" onClick={() => changeZoom(-.14)}>−</button>
               <span>{Math.round(zoom * 100)}%</span>
-              <button aria-label="Zoom in" onClick={() => setZoom(z => Math.min(1.6, +(z + 0.1).toFixed(2)))}>＋</button>
-              <button onClick={resetLayout}>Reset islands</button>
+              <button type="button" aria-label="Zoom in" onClick={() => changeZoom(.14)}>＋</button>
+              <button type="button" onClick={fitMap}>Whole map</button>
+              <button type="button" disabled={!islands.length} onClick={() => {
+                const next = islands.find(island => island.progress < 100) || islands[0];
+                if (next) focusOnIsland(next.id);
+              }}>Find my ship</button>
+              <select className="island-jump" aria-label="Navigate to an island" defaultValue="" key={active.repo + islands.length}
+                onChange={event => { if (event.target.value) focusOnIsland(event.target.value, true); event.target.value = ""; }}>
+                <option value="">Jump to island…</option>
+                {islands.map(island => <option key={island.id} value={island.id}>{island.number + 1}. {island.name}</option>)}
+              </select>
+              <button type="button" onClick={resetLayout}>Reset islands</button>
               <button className="map-quest-toggle" aria-expanded={questsOpen} onClick={toggleQuests}>
                 {questsOpen ? "Hide quests" : "Show quests"}
               </button>
@@ -343,8 +410,8 @@ export default function Dashboard() {
           {error && <div className="error-banner">Could not fetch roadmap: {error} <button onClick={() => setTick(t => t + 1)}>Retry</button></div>}
           {!error && loading && !snapshot && <div className="loading-banner">Unrolling the charts and finding your islands…</div>}
           <div className="map-scroll" ref={mapViewport}>
-            <svg className="treasure-map" viewBox={"0 0 " + mapWidth + " 700"}
-              style={{ width: mapWidth * zoom, height: 700 * zoom }}
+            <svg className="treasure-map" viewBox={"0 0 " + mapWidth + " " + mapHeight}
+              style={{ width: mapWidth * zoom, height: mapHeight * zoom }}
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
               onPointerCancel={onUp} aria-label="Draggable treasure map of project milestones">
               <defs>
@@ -355,10 +422,10 @@ export default function Dashboard() {
                   <path d="M120 0H0V120" fill="none" stroke="#796f50" opacity=".11" strokeWidth="1" />
                 </pattern>
               </defs>
-              <rect width={mapWidth} height="700" fill="#d9d1ad" />
-              <rect width={mapWidth} height="700" fill="url(#graticule)" />
-              <rect width={mapWidth} height="700" fill="url(#waves)" />
-              <path d={"M 35 35 H " + (mapWidth - 35) + " V 665 H 35 Z"} fill="none" stroke="#847454" strokeWidth="1.3" opacity=".55" />
+              <rect width={mapWidth} height={mapHeight} fill="#d9d1ad" />
+              <rect width={mapWidth} height={mapHeight} fill="url(#graticule)" />
+              <rect width={mapWidth} height={mapHeight} fill="url(#waves)" />
+              <path d={"M 35 35 H " + (mapWidth - 35) + " V " + (mapHeight - 35) + " H 35 Z"} fill="none" stroke="#847454" strokeWidth="1.3" opacity=".55" />
               <g transform="translate(125 96)" opacity=".66">
                 <circle r="50" stroke="#53422f" strokeWidth="1" fill="none" />
                 <circle r="37" stroke="#53422f" strokeWidth=".5" fill="none" />
@@ -367,8 +434,14 @@ export default function Dashboard() {
                 <text y="-67" textAnchor="middle" fontSize="20">N</text><text x="72" y="6" fontSize="16">E</text>
                 <text y="82" textAnchor="middle" fontSize="16">S</text><text x="-84" y="6" fontSize="16">W</text>
               </g>
-              <text x={mapWidth * .43} y="85" textAnchor="middle" className="map-sea-title">THE UNCHARTED WATERS</text>
-              <text x={mapWidth * .69} y="590" textAnchor="middle" className="map-sea-subtitle">FORTUNE FAVOURS THE STEADFAST</text>
+              <text x={mapWidth * .46} y="99" textAnchor="middle" className="map-sea-title">THE UNCHARTED WATERS</text>
+              <text x={mapWidth * .51} y={mapHeight * .50} textAnchor="middle" className="map-sea-subtitle">THE CORAL SEA</text>
+              <text x={mapWidth * .69} y={mapHeight - 90} textAnchor="middle" className="map-sea-subtitle">FORTUNE FAVOURS THE STEADFAST</text>
+              <g transform={"translate(" + (mapWidth - 175) + " " + (mapHeight - 130) + ")"} opacity=".37">
+                <path d="M-50 22 Q-25 0 4 20 Q28 2 51 22 M-42 35Q-19 14 3 35Q29 18 48 35" fill="none" stroke="#5e6a5c" strokeWidth="1.4"/>
+                <path d="M-30 3h71l-13 17h-48z M5 0v-67l-34 60H5l32-36-32-15 M5-65v-8 M5-73l21 5-21 5"
+                  fill="none" stroke="#514638" strokeWidth="2" />
+              </g>
               {locations.length > 1 && <><path d={journeyPath} stroke="#75452f" strokeWidth="3.5" strokeDasharray="2 17" strokeLinecap="round" fill="none" opacity=".85" />
                 {locations.slice(0, -1).map((p, index) => {
                   const q = locations[index + 1];
@@ -412,7 +485,7 @@ export default function Dashboard() {
               })()}
             </svg>
           </div>
-          <div className="map-bottom"><span><i className="legend-dot done-dot" />Completed</span><span><i className="legend-dot current-dot" />Your current island</span><span><i className="legend-dot future-dot" />Upcoming</span><span className="drag-hint">Drag the sea to navigate · Drag an island to arrange · Click an island to explore</span></div>
+          <div className="map-bottom"><span><i className="legend-dot done-dot" />Completed</span><span><i className="legend-dot current-dot" />Your current island</span><span><i className="legend-dot future-dot" />Upcoming</span><span className="drag-hint">Pan in any direction · Zoom for detail · Drag islands to arrange · Click to explore</span></div>
         </section>
 
         <section className="below-grid">
