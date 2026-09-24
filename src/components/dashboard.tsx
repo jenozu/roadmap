@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { firstProject, type Project, type ProjectSnapshot } from "@/lib/github";
 import type { Island, Task } from "@/lib/roadmap";
-import { layoutForCount, fitMapScale, clampIsland, type Point } from "@/lib/map-layout";
+import { layoutForCount, clampIsland, type Point } from "@/lib/map-layout";
+import { centerAt, visibleCenter, fitCamera, openingScale, zoomAround, panCamera } from "@/lib/map-camera";
 import IslandSketch from "@/components/island-sketch";
 import { resolveRoadmapHref } from "@/lib/roadmap-links";
 import { captureProgress, diffProgress, type ProgressChange, type ProgressState } from "@/lib/progress-diff";
@@ -17,8 +18,7 @@ type Drag = {
   x: number;
   y: number;
   origin: Location;
-  scroll: number;
-  scrollTop: number;
+  camera: Location;
   moved: boolean;
 };
 const fleetKey = "voyages:projects:v1";
@@ -61,7 +61,11 @@ export default function Dashboard() {
   const questScroll = useRef<HTMLDivElement>(null);
   const savedQuestScrollTop = useRef(0);
   const [positions, setPositions] = useState<Record<string, Location>>({});
-  const [zoom, setZoom] = useState(.55);
+  const [zoom, setZoom] = useState(.72);
+  const zoomRef = useRef(.72);
+  const [camera, setCamera] = useState<Location>({ x: 0, y: 0 });
+  const cameraRef = useRef<Location>({ x: 0, y: 0 });
+  const [fullscreen, setFullscreen] = useState(false);
   const initializedMap = useRef("");
   const [showAdd, setShowAdd] = useState(false);
   const [newRepo, setNewRepo] = useState("");
@@ -103,13 +107,21 @@ export default function Dashboard() {
   }, [questsOpen]);
 
   useEffect(() => {
-    if (!questsOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setQuestsOpen(false);
+      if (event.key !== "Escape") return;
+      if (questsOpen) setQuestsOpen(false);
+      else if (fullscreen) setFullscreen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [questsOpen]);
+  }, [questsOpen, fullscreen]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [fullscreen]);
 
   const active = projects.find(p => p.id === activeId) || firstProject;
   const load = useCallback(async (signal: AbortSignal) => {
@@ -181,55 +193,132 @@ export default function Dashboard() {
   const currentLevelXp = xp % 500;
   const projectFileUrl = "https://github.com/" + active.repo + "/blob/" + encodeURIComponent(active.branch) + "/" + active.path;
 
+  function setCameraPosition(next: Location) {
+    cameraRef.current = next;
+    setCamera(next);
+  }
+
+  function setCameraZoom(next: number) {
+    zoomRef.current = next;
+    setZoom(next);
+  }
+
   function fitMap() {
     const viewport = mapViewport.current;
     if (!viewport) return;
-    const scale = fitMapScale(viewport.clientWidth, viewport.clientHeight, mapWidth, mapHeight);
-    setZoom(scale);
+    const fit = fitCamera(
+      { width: viewport.clientWidth, height: viewport.clientHeight },
+      { width: mapWidth, height: mapHeight }
+    );
+    setCameraZoom(fit.scale);
+    setCameraPosition(fit.camera);
     setQuestsOpen(false);
-    requestAnimationFrame(() => { viewport.scrollLeft = 0; viewport.scrollTop = 0; });
   }
 
   function changeZoom(amount: number) {
     const viewport = mapViewport.current;
-    const next = Math.max(.24, Math.min(1.65, +(zoom + amount).toFixed(2)));
-    if (viewport) {
-      const x = (viewport.scrollLeft + viewport.clientWidth / 2) / zoom;
-      const y = (viewport.scrollTop + viewport.clientHeight / 2) / zoom;
-      setZoom(next);
-      requestAnimationFrame(() => {
-        viewport.scrollLeft = x * next - viewport.clientWidth / 2;
-        viewport.scrollTop = y * next - viewport.clientHeight / 2;
-      });
-    } else setZoom(next);
+    if (!viewport) return;
+    const next = Math.max(.24, Math.min(1.85, +(zoomRef.current + amount).toFixed(2)));
+    setCameraPosition(zoomAround(cameraRef.current, zoomRef.current, next, {
+      x: viewport.clientWidth / 2, y: viewport.clientHeight / 2
+    }));
+    setCameraZoom(next);
   }
 
   function focusOnIsland(id: string, openQuests = false) {
     const viewport = mapViewport.current;
     const index = islands.findIndex(island => island.id === id);
     if (!viewport || index < 0) return;
-    const nextZoom = Math.max(.84, zoom);
-    const point = locations[index];
+    const nextZoom = Math.max(.84, zoomRef.current);
+    // Quest drawer overlays the right side; leave its map target visible.
+    const questOverlap = openQuests ? Math.min(430, viewport.clientWidth * .38) : 0;
+    setCameraPosition(centerAt(locations[index], {
+      width: viewport.clientWidth - questOverlap, height: viewport.clientHeight
+    }, nextZoom));
+    setCameraZoom(nextZoom);
     if (openQuests) selectIsland(id);
     else setQuestsOpen(false);
-    setZoom(nextZoom);
-    requestAnimationFrame(() => {
-      const visibleWidth = Math.max(310, viewport.clientWidth - (openQuests ? Math.min(465, viewport.clientWidth * .45) : 0));
-      viewport.scrollLeft = point.x * nextZoom - visibleWidth / 2;
-      viewport.scrollTop = point.y * nextZoom - viewport.clientHeight / 2;
-    });
   }
 
-  // First entry to a project presents the complete archipelago. Background
-  // refreshes don't steal the user's location or reset their zoom/pan.
+  function toggleFullscreen() {
+    const viewport = mapViewport.current;
+    const world = viewport
+      ? visibleCenter(cameraRef.current, { width: viewport.clientWidth, height: viewport.clientHeight }, zoomRef.current)
+      : { x: mapWidth / 2, y: mapHeight / 2 };
+    setFullscreen(value => !value);
+    setQuestsOpen(false);
+    // Wait for the fixed-position viewport (or inline viewport) to reflow.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const resized = mapViewport.current;
+      if (!resized) return;
+      setCameraPosition(centerAt(world, {
+        width: resized.clientWidth, height: resized.clientHeight
+      }, zoomRef.current));
+    }));
+  }
+
+  // The normal view begins at a readable zoom focused on the current
+  // milestone. Whole Map is a separate explicit overview, not a tiny default.
   useEffect(() => {
     if (!snapshot || snapshot.project.repo !== active.repo || initializedMap.current === active.repo) return;
     initializedMap.current = active.repo;
-    const frame = requestAnimationFrame(() => fitMap());
+    const frame = requestAnimationFrame(() => {
+      const viewport = mapViewport.current;
+      if (!viewport) return;
+      const scale = openingScale(
+        { width: viewport.clientWidth, height: viewport.clientHeight },
+        { width: mapWidth, height: mapHeight }
+      );
+      const index = snapshot.voyage.islands.findIndex(island => island.tasks.length > 0 && island.progress < 100);
+      const point = archipelago.points[Math.max(0, index)] || { x: mapWidth / 2, y: mapHeight / 2 };
+      setCameraZoom(scale);
+      setCameraPosition(centerAt(point, {
+        width: viewport.clientWidth, height: viewport.clientHeight
+      }, scale));
+    });
     return () => cancelAnimationFrame(frame);
-    // The first map view is intentionally initialized only once per repository.
+    // Initialize a repository once. Background syncs must not hijack the camera.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot?.project.repo, active.repo, mapWidth, mapHeight]);
+
+  // Trackpad wheel pans across the map; Ctrl+wheel / pinch zooms around the
+  // cursor. Native non-passive listener prevents the page scrolling instead.
+  useEffect(() => {
+    const viewport = mapViewport.current;
+    if (!viewport) return;
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      if (event.ctrlKey) {
+        const rect = viewport.getBoundingClientRect();
+        const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        const next = Math.max(.24, Math.min(1.85, zoomRef.current * (event.deltaY > 0 ? .92 : 1.08)));
+        setCameraPosition(zoomAround(cameraRef.current, zoomRef.current, next, point));
+        setCameraZoom(next);
+      } else {
+        setCameraPosition(panCamera(cameraRef.current, -event.deltaX, -event.deltaY));
+      }
+    };
+    viewport.addEventListener("wheel", wheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", wheel);
+  }, []);
+
+  // Recenter the same world location after a browser resize, including the
+  // CSS-only changes used by the full-window map mode.
+  useEffect(() => {
+    const viewport = mapViewport.current;
+    if (!viewport) return;
+    let previous = { width: viewport.clientWidth, height: viewport.clientHeight };
+    const observer = new ResizeObserver(() => {
+      const next = { width: viewport.clientWidth, height: viewport.clientHeight };
+      if (next.width <= 0 || next.height <= 0) return;
+      if (previous.width === next.width && previous.height === next.height) return;
+      const world = visibleCenter(cameraRef.current, previous, zoomRef.current);
+      setCameraPosition(centerAt(world, next, zoomRef.current));
+      previous = next;
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
 
   function persistProjects(next: Project[]) {
     setProjects(next);
@@ -280,50 +369,47 @@ export default function Dashboard() {
     setQuestsOpen(open => !open);
   }
 
-  function onDown(event: ReactPointerEvent<SVGSVGElement>) {
-    if (event.button !== 0 || !mapViewport.current) return;
-    const element = (event.target as Element).closest("[data-island]");
+  function onDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || !event.isPrimary) return;
+    const target = event.target as Element;
+    const element = target.closest("[data-island]");
     const id = element?.getAttribute("data-island") || null;
-    const index = islands.findIndex(i => i.id === id);
+    const index = islands.findIndex(island => island.id === id);
     drag.current = {
       id,
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
       origin: index >= 0 ? locations[index] : { x: 0, y: 0 },
-      scroll: mapViewport.current.scrollLeft,
-      scrollTop: mapViewport.current.scrollTop,
+      camera: { ...cameraRef.current },
       moved: false
     };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function onMove(event: ReactPointerEvent<SVGSVGElement>) {
+  function onMove(event: ReactPointerEvent<HTMLDivElement>) {
     const gesture = drag.current;
-    if (!gesture || gesture.pointerId !== event.pointerId || !mapViewport.current) return;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
     const dx = event.clientX - gesture.x;
     const dy = event.clientY - gesture.y;
     if (Math.abs(dx) + Math.abs(dy) > 6) gesture.moved = true;
     if (!gesture.moved) return;
     if (gesture.id) {
-      const visualWidth = event.currentTarget.getBoundingClientRect().width;
-      const multiplier = mapWidth / visualWidth;
       const updated = {
         ...positionsRef.current,
         [gesture.id]: clampIsland({
-          x: gesture.origin.x + dx * multiplier,
-          y: gesture.origin.y + dy * multiplier
+          x: gesture.origin.x + dx / zoomRef.current,
+          y: gesture.origin.y + dy / zoomRef.current
         }, mapWidth, mapHeight)
       };
       positionsRef.current = updated;
       setPositions(updated);
     } else {
-      mapViewport.current.scrollLeft = gesture.scroll - dx;
-      mapViewport.current.scrollTop = gesture.scrollTop - dy;
+      setCameraPosition(panCamera(gesture.camera, dx, dy));
     }
   }
 
-  function onUp(event: ReactPointerEvent<SVGSVGElement>) {
+  function onUp(event: ReactPointerEvent<HTMLDivElement>) {
     const gesture = drag.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     if (gesture.id && !gesture.moved) selectIsland(gesture.id);
@@ -334,12 +420,26 @@ export default function Dashboard() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
-  function onCancel(event: ReactPointerEvent<SVGSVGElement>) {
+  function onCancel(event: ReactPointerEvent<HTMLDivElement>) {
     if (drag.current?.pointerId !== event.pointerId) return;
     drag.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+  }
+
+  function onMapKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.currentTarget !== event.target) return;
+    const offsets: Record<string, Location> = {
+      ArrowLeft: { x: 75, y: 0 },
+      ArrowRight: { x: -75, y: 0 },
+      ArrowUp: { x: 0, y: 75 },
+      ArrowDown: { x: 0, y: -75 }
+    };
+    const delta = offsets[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    setCameraPosition(panCamera(cameraRef.current, delta.x, delta.y));
   }
 
   function resetLayout() {
@@ -445,7 +545,7 @@ export default function Dashboard() {
           <div className="stat stat-level"><small>CAPTAIN&apos;S LEVEL</small><strong>{snapshot?.voyage.level ?? "—"}</strong><div className="level-track"><span style={{ width: currentLevelXp / 5 + "%" }} /></div><p>{currentLevelXp} / 500 XP to next level</p></div>
         </section>
 
-        <section className="atlas-panel" aria-label="Interactive voyage map">
+        <section className={"atlas-panel" + (fullscreen ? " atlas-fullscreen" : "")} aria-label="Interactive voyage map">
           <div className="atlas-top">
             <div><span className="eyebrow">YOUR CHARTED COURSE</span><h2>The expedition map</h2></div>
             <div className="map-actions">
@@ -464,6 +564,9 @@ export default function Dashboard() {
                 {islands.map(island => <option key={island.id} value={island.id}>{island.number + 1}. {island.name}</option>)}
               </select>
               <button type="button" onClick={resetLayout}>Reset islands</button>
+              <button type="button" className="fullscreen-toggle" aria-pressed={fullscreen} onClick={toggleFullscreen}>
+                {fullscreen ? "⤡ Exit full screen" : "⛶ Full screen"}
+              </button>
               <button className="map-quest-toggle" aria-expanded={questsOpen} onClick={toggleQuests}>
                 {questsOpen ? "Hide quests" : "Show quests"}
               </button>
@@ -474,11 +577,13 @@ export default function Dashboard() {
             No islands were found. Your Markdown needs headings such as <code># Phase 0 — Planning</code> or <code>## M1: Planning</code>.
           </div>}
           {!error && loading && !snapshot && <div className="loading-banner">Unrolling the charts and finding your islands…</div>}
-          <div className="map-scroll" ref={mapViewport} tabIndex={0} role="region" aria-label="Pan and zoom the project archipelago">
+          <div className="map-scroll" ref={mapViewport} tabIndex={0} role="region"
+            aria-label="Pan and zoom the project archipelago" onKeyDown={onMapKeyDown}
+            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}>
             <svg className="treasure-map" viewBox={"0 0 " + mapWidth + " " + mapHeight}
-              style={{ width: mapWidth * zoom, height: mapHeight * zoom }}
-              onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
-              onPointerCancel={onCancel} aria-label="Draggable treasure map of project milestones">
+              style={{ width: mapWidth, height: mapHeight,
+                transform: "translate(" + camera.x + "px, " + camera.y + "px) scale(" + zoom + ")" }}
+              aria-label="Draggable treasure map of project milestones">
               <defs>
                 <pattern id="waves" width="150" height="130" patternUnits="userSpaceOnUse">
                   <path d="M12 35q11 -6 23 0m24 55q11 -6 23 0m61 -60q9 -5 20 0" fill="none" stroke="#5b756c" strokeWidth="1" opacity=".23" />
@@ -545,7 +650,7 @@ export default function Dashboard() {
               })()}
             </svg>
           </div>
-          <div className="map-bottom"><span><i className="legend-dot done-dot" />Completed</span><span><i className="legend-dot current-dot" />Your current island</span><span><i className="legend-dot future-dot" />Upcoming</span><span className="drag-hint">Pan in any direction · Zoom for detail · Drag islands to arrange · Click to explore</span></div>
+          <div className="map-bottom"><span><i className="legend-dot done-dot" />Completed</span><span><i className="legend-dot current-dot" />Your current island</span><span><i className="legend-dot future-dot" />Upcoming</span><span className="drag-hint">Drag anywhere to pan · Wheel/trackpad to travel · Ctrl + wheel to zoom · Drag islands to arrange · Click to explore</span></div>
         </section>
 
         <section className="below-grid">
