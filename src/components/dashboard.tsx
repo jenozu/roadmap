@@ -329,7 +329,7 @@ export default function Dashboard() {
         img: ({ src, alt }) => {
           // External embedded images can track readers of imported roadmaps.
           // Link to the source instead of automatically loading them.
-          const resolved = resolveRoadmapHref(active, src);
+          const resolved = resolveRoadmapHref(active, typeof src === "string" ? src : undefined);
           return resolved
             ? <a href={resolved} target="_blank" rel="noopener noreferrer">View illustration: {alt || "Image"} ↗</a>
             : <span>Image reference unavailable</span>;
@@ -433,7 +433,7 @@ export default function Dashboard() {
           </div>
           {error && <div className="error-banner">Could not fetch roadmap: {error} <button onClick={() => setTick(t => t + 1)}>Retry</button></div>}
           {!error && loading && !snapshot && <div className="loading-banner">Unrolling the charts and finding your islands…</div>}
-          <div className="map-scroll" ref={mapViewport}>
+          <div className="map-scroll" ref={mapViewport} tabIndex={0} role="region" aria-label="Pan and zoom the project archipelago">
             <svg className="treasure-map" viewBox={"0 0 " + mapWidth + " " + mapHeight}
               style={{ width: mapWidth * zoom, height: mapHeight * zoom }}
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}

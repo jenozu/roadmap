@@ -97,3 +97,6 @@
   .map-scroll{height:min(62vh,580px);min-height:365px}
   .island-jump{max-width:170px}
 }
+
+/* Center the chart when its full overview fits inside the map viewport. */
+.map-scroll .treasure-map{margin-inline:auto}

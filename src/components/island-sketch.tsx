@@ -16,7 +16,7 @@ const coastlines = [
 export default function IslandSketch({ variant, state, isFinal }: IslandSketchProps) {
   const coast = coastlines[variant % coastlines.length];
   const fill = state === "complete" ? "#a6ac8b" : state === "current" ? "#c8b787" : "#bdb397";
-  return <g aria-hidden="true" pointerEvents="none">
+  return <g aria-hidden="true">
     <path d={coast} transform="translate(0 4) scale(1.13 1.12)"
       fill="none" stroke="#9a9474" strokeWidth="1.3" strokeDasharray="3 5" opacity=".55" />
     <path d={coast} fill={fill} stroke="#615b42" strokeWidth="1.7" />
