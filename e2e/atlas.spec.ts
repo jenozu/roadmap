@@ -85,3 +85,46 @@ test("dragging an island moves it and saves its location, rather than panning th
   await page.mouse.up();
   await expect.poll(() => current.getAttribute("transform")).not.toBe(initial);
 });
+
+test("voyage settings can be edited and corrected without duplicating the fleet", async ({ page }) => {
+  await page.getByRole("button", { name: "Chart a new voyage" }).click();
+  await page.getByLabel("Repository", { exact: true }).fill("jenozu/twin-disc");
+  await page.getByLabel("Display name").fill("Twin Disc");
+  await page.getByLabel("Markdown roadmap").fill("master_list.md");
+  await page.getByLabel("Branch", { exact: true }).fill("main");
+  await page.getByRole("button", { name: "Add voyage" }).click();
+  await expect(page.locator(".fleet-entry")).toHaveCount(2);
+
+  await page.getByRole("button", { name: "Edit voyage Twin Disc" }).click();
+  await page.getByLabel("Markdown roadmap").fill("master_plan.md");
+  await page.getByLabel("Display name").fill("Twin Disc — Updated");
+  await page.getByRole("button", { name: "Save voyage" }).click();
+  await expect(page.locator(".fleet-entry")).toHaveCount(2);
+  await expect(page.locator(".topbar h1")).toContainText("Twin Disc — Updated");
+  await page.reload();
+  await expect(page.locator(".fleet-entry")).toHaveCount(2);
+  await page.getByRole("button", { name: "Edit voyage Twin Disc — Updated" }).click();
+  await expect(page.getByLabel("Markdown roadmap")).toHaveValue("master_plan.md");
+});
+
+test("removal requires confirmation and stays removed after reload, even for the starter voyage", async ({ page }) => {
+  await page.getByRole("button", { name: "Remove voyage Trade Alerts" }).click();
+  await expect(page.getByRole("group", { name: "Confirm removal of Trade Alerts" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator(".fleet-entry")).toHaveCount(1);
+  await page.getByRole("button", { name: "Remove voyage Trade Alerts" }).click();
+  await page.getByRole("button", { name: "Remove voyage", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your fleet is empty" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Your fleet is empty" })).toBeVisible();
+  await page.getByRole("button", { name: "Add your first voyage" }).click();
+  await expect(page.getByLabel("Markdown roadmap")).toHaveValue("master_plan.md");
+});
+
+test("a second voyage using the same repository is rejected before saving", async ({ page }) => {
+  await page.getByRole("button", { name: "Chart a new voyage" }).click();
+  await page.getByLabel("Repository", { exact: true }).fill("JENOZU/TRADE-ALERTS");
+  await page.getByRole("button", { name: "Add voyage" }).click();
+  await expect(page.getByRole("alert")).toContainText("already in your fleet");
+  await expect(page.locator(".fleet-entry")).toHaveCount(1);
+});
