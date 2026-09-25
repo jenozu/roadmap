@@ -8,6 +8,7 @@ import { centerAt, visibleCenter, fitCamera, openingScale, zoomAround, panCamera
 import IslandSketch from "@/components/island-sketch";
 import { resolveRoadmapHref } from "@/lib/roadmap-links";
 import { captureProgress, diffProgress, type ProgressChange, type ProgressState } from "@/lib/progress-diff";
+import { fleetStorageKey, readFleet, saveVoyage, removeVoyage } from "@/lib/voyage-manager";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -21,7 +22,7 @@ type Drag = {
   camera: Location;
   moved: boolean;
 };
-const fleetKey = "voyages:projects:v1";
+
 const layoutPrefix = "voyages:archipelago-layout:v2:";
 const progressPrefix = "voyages:recorded-progress:v1:";
 const historyPrefix = "voyages:observed-task-events:v1:";
@@ -49,6 +50,7 @@ function inkPath(points: Location[]): string {
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([firstProject]);
   const [activeId, setActiveId] = useState(firstProject.id);
+  const [fleetReady, setFleetReady] = useState(false);
   const [snapshot, setSnapshot] = useState<ProjectSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,9 +70,11 @@ export default function Dashboard() {
   const [fullscreen, setFullscreen] = useState(false);
   const initializedMap = useRef("");
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [newRepo, setNewRepo] = useState("");
   const [newName, setNewName] = useState("");
-  const [newPath, setNewPath] = useState("master_list.md");
+  const [newPath, setNewPath] = useState("master_plan.md");
   const [newBranch, setNewBranch] = useState("main");
   const [addError, setAddError] = useState("");
   const mapViewport = useRef<HTMLDivElement>(null);
@@ -79,18 +83,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(fleetKey);
-      if (saved) {
-        const stored = JSON.parse(saved) as Project[];
-        if (Array.isArray(stored)) {
-          const known = new Map<string, Project>([[firstProject.id, firstProject]]);
-          for (const item of stored) {
-            if (item && /^[\w.\-]+\/[\w.\-]+$/.test(item.repo)) known.set(item.id, item);
-          }
-          setProjects([...known.values()]);
-        }
-      }
-    } catch { /* local storage can be unavailable */ }
+      const restored = readFleet(localStorage.getItem(fleetStorageKey), firstProject);
+      setProjects(restored);
+      setActiveId(restored[0]?.id || "");
+    } catch {
+      setProjects([firstProject]);
+      setActiveId(firstProject.id);
+    } finally {
+      setFleetReady(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -123,7 +124,7 @@ export default function Dashboard() {
     return () => { document.body.style.overflow = previousOverflow; };
   }, [fullscreen]);
 
-  const active = projects.find(p => p.id === activeId) || firstProject;
+  const active = projects.find(p => p.id === activeId) || projects[0] || firstProject;
   const load = useCallback(async (signal: AbortSignal) => {
     const query = new URLSearchParams({
       repo: active.repo, branch: active.branch, path: active.path, name: active.name
@@ -135,6 +136,7 @@ export default function Dashboard() {
   }, [active.repo, active.branch, active.path, active.name]);
 
   useEffect(() => {
+    if (!fleetReady || projects.length === 0) return;
     const controller = new AbortController();
     setLoading(true);
     setError("");
@@ -172,7 +174,7 @@ export default function Dashboard() {
       .catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Import failed."); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [load, tick, active.repo]);
+  }, [load, tick, active.repo, fleetReady, projects.length]);
 
   useEffect(() => {
     const timer = setInterval(() => setTick(n => n + 1), 90000);
@@ -322,36 +324,73 @@ export default function Dashboard() {
 
   function persistProjects(next: Project[]) {
     setProjects(next);
-    try { localStorage.setItem(fleetKey, JSON.stringify(next)); } catch { /* non-fatal */ }
+    try { localStorage.setItem(fleetStorageKey, JSON.stringify(next)); } catch { /* non-fatal */ }
   }
 
-  function addProject(event: FormEvent<HTMLFormElement>) {
+  function beginAdding() {
+    setEditingId(null);
+    setRemovingId(null);
+    setNewRepo("");
+    setNewName("");
+    setNewPath("master_plan.md");
+    setNewBranch("main");
+    setAddError("");
+    setShowAdd(true);
+  }
+
+  function beginEditing(project: Project) {
+    setEditingId(project.id);
+    setRemovingId(null);
+    setNewRepo(project.repo);
+    setNewName(project.name);
+    setNewPath(project.path);
+    setNewBranch(project.branch);
+    setAddError("");
+    setShowAdd(true);
+  }
+
+  function closeForm() {
+    setShowAdd(false);
+    setEditingId(null);
+    setAddError("");
+  }
+
+  function submitVoyage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAddError("");
-    const repo = newRepo.trim();
-    const path = newPath.trim();
-    const branch = newBranch.trim();
-    if (!/^[\w.\-]+\/[\w.\-]+$/.test(repo) || !/^[\w./\-]+\.md$/.test(path) ||
-        path.includes("..") || !/^[\w./\-]+$/.test(branch) || branch.includes("..")) {
-      setAddError("Use owner/repo, a Markdown path and a valid branch.");
-      return;
+    try {
+      const updated = saveVoyage(projects, {
+        repo: newRepo, name: newName, path: newPath, branch: newBranch
+      }, editingId);
+      persistProjects(updated.projects);
+      setActiveId(updated.activeId);
+      initializedMap.current = "";
+      setSnapshot(null);
+      setSelected(null);
+      setRecentChanges([]);
+      setQuestsOpen(false);
+      setTick(value => value + 1);
+      closeForm();
+    } catch (reason) {
+      setAddError(reason instanceof Error ? reason.message : "Check the repository and roadmap details.");
     }
-    const project: Project = {
-      id: repo.toLowerCase().replace(/[^a-z\d-]+/g, "-"),
-      repo,
-      path,
-      branch,
-      name: newName.trim() || repo.split("/")[1]
-    };
-    const next = [...projects.filter(p => p.id !== project.id), project];
-    persistProjects(next);
-    setActiveId(project.id);
-    setSnapshot(null);
-    setSelected(null);
-    setRecentChanges([]);
-    initializedMap.current = "";
-    setQuestsOpen(false);
-    setShowAdd(false);
+  }
+
+  function confirmRemoval(project: Project) {
+    const updated = removeVoyage(projects, project.id, activeId);
+    persistProjects(updated.projects);
+    setRemovingId(null);
+    if (editingId === project.id) closeForm();
+    if (activeId === project.id) {
+      setActiveId(updated.activeId);
+      setSnapshot(null);
+      setSelected(null);
+      setRecentChanges([]);
+      setQuestsOpen(false);
+      setFullscreen(false);
+      initializedMap.current = "";
+      setTick(value => value + 1);
+    }
   }
 
   function selectIsland(id: string) {
@@ -503,24 +542,56 @@ export default function Dashboard() {
         <div className="fleet-heading">THE FLEET <span>{projects.length} voyage{projects.length === 1 ? "" : "s"}</span></div>
         <div className="project-list">
           {projects.map(project => (
-            <button key={project.id} type="button"
-              className={"project-choice " + (active.id === project.id ? "active" : "")}
-              onClick={() => { initializedMap.current = ""; setRecentChanges([]); setActiveId(project.id); setSnapshot(null); setSelected(null); setQuestsOpen(false); }}>
-              <span className="project-crest">⚓</span>
-              <span><strong>{project.name}</strong><small>{project.repo}</small></span>
-              {active.id === project.id && <span className="choice-chevron">›</span>}
-            </button>
+            <div key={project.id} className={"fleet-entry" + (active.id === project.id ? " fleet-selected" : "")}>
+              <button type="button" className={"project-choice " + (active.id === project.id ? "active" : "")}
+                onClick={() => {
+                  initializedMap.current = "";
+                  setRecentChanges([]);
+                  setActiveId(project.id);
+                  setSnapshot(null);
+                  setSelected(null);
+                  setQuestsOpen(false);
+                }}>
+                <span className="project-crest">⚓</span>
+                <span><strong>{project.name}</strong><small>{project.repo}</small></span>
+                {active.id === project.id && <span className="choice-chevron">›</span>}
+              </button>
+              <div className="fleet-entry-actions">
+                <button type="button" aria-label={"Edit voyage " + project.name}
+                  onClick={() => beginEditing(project)}>Edit</button>
+                <button type="button" aria-label={"Remove voyage " + project.name}
+                  onClick={() => { setRemovingId(project.id); if (editingId === project.id) closeForm(); }}>Remove</button>
+              </div>
+              {removingId === project.id && <div className="remove-confirm" role="group" aria-label={"Confirm removal of " + project.name}>
+                <p>Remove <strong>{project.name}</strong> from this browser? Your GitHub repository will not be changed.</p>
+                <div>
+                  <button type="button" onClick={() => setRemovingId(null)}>Cancel</button>
+                  <button type="button" className="confirm-delete" onClick={() => confirmRemoval(project)}>Remove voyage</button>
+                </div>
+              </div>}
+            </div>
           ))}
         </div>
-        <button className="new-voyage" onClick={() => setShowAdd(value => !value)}>＋ Chart a new voyage</button>
+        <button className="new-voyage" type="button" onClick={() => {
+          if (showAdd && !editingId) closeForm();
+          else beginAdding();
+        }}>＋ Chart a new voyage</button>
         {showAdd && (
-          <form className="add-form" onSubmit={addProject}>
-            <label>Repository <input required placeholder="owner/repo" value={newRepo} onChange={e => setNewRepo(e.target.value)} /></label>
-            <label>Display name <input placeholder="Project name" value={newName} onChange={e => setNewName(e.target.value)} /></label>
-            <label>Markdown roadmap <input required value={newPath} onChange={e => setNewPath(e.target.value)} /></label>
-            <label>Branch <input required value={newBranch} onChange={e => setNewBranch(e.target.value)} /></label>
-            {addError && <p className="form-error">{addError}</p>}
-            <button className="action-button" type="submit">Add public repository</button>
+          <form className="add-form" onSubmit={submitVoyage}>
+            <strong>{editingId ? "EDIT VOYAGE" : "CHART A NEW VOYAGE"}</strong>
+            <label>Repository <input required placeholder="owner/repo" value={newRepo}
+              onChange={event => setNewRepo(event.target.value)} /></label>
+            <label>Display name <input placeholder="Project name" value={newName}
+              onChange={event => setNewName(event.target.value)} /></label>
+            <label>Markdown roadmap <input required placeholder="master_plan.md" value={newPath}
+              onChange={event => setNewPath(event.target.value)} /></label>
+            <label>Branch <input required value={newBranch} onChange={event => setNewBranch(event.target.value)} /></label>
+            <small>Public GitHub repositories only. Use the exact path to the .md file.</small>
+            {addError && <p className="form-error" role="alert">{addError}</p>}
+            <div className="fleet-form-actions">
+              <button className="action-button" type="submit">{editingId ? "Save voyage" : "Add voyage"}</button>
+              <button className="fleet-cancel" type="button" onClick={closeForm}>Cancel</button>
+            </div>
           </form>
         )}
         <div className="fleet-foot">
@@ -530,6 +601,12 @@ export default function Dashboard() {
       </aside>
 
       <main className="workspace">
+        {projects.length === 0 ? <div className="empty-fleet">
+          <span className="empty-compass" aria-hidden="true">✥</span>
+          <h1>Your fleet is empty</h1>
+          <p>Chart a new voyage by connecting a public GitHub repository and selecting its Markdown roadmap.</p>
+          <button className="action-button" type="button" onClick={beginAdding}>Add your first voyage</button>
+        </div> : <>
         <header className="topbar">
           <div><div className="eyebrow">THE CAPTAIN&apos;S TABLE / {active.repo.toUpperCase()}</div><h1>{active.name} <span className="title-flourish">✣</span></h1><p>Every finished quest brings the destination a little closer.</p></div>
           <div className="top-actions">
@@ -682,9 +759,10 @@ export default function Dashboard() {
             {islands.length > 0 && islands.every(i => i.progress === 100) && <p className="empty-note">Every island has been charted. Your expedition is complete.</p>}
           </article>
         </section>
+        </>}
       </main>
 
-      {islands.length > 0 && <button
+      {projects.length > 0 && islands.length > 0 && <button
         type="button"
         className={"quest-edge-tab " + (questsOpen && selectedIsland ? "tab-open" : "tab-closed")}
         aria-controls="quest-panel"
@@ -694,7 +772,7 @@ export default function Dashboard() {
         <span aria-hidden="true" className="quest-tab-symbol">{questsOpen && selectedIsland ? "›" : "‹"}</span>
         <span>{questsOpen && selectedIsland ? "HIDE QUESTS" : "OPEN QUESTS"}</span>
       </button>}
-      {questsOpen && selectedIsland && <aside id="quest-panel" className="quest-drawer" aria-label="Selected island quests">
+      {projects.length > 0 && questsOpen && selectedIsland && <aside id="quest-panel" className="quest-drawer" aria-label="Selected island quests">
         <div className="drawer-fixed">
           <button className="drawer-close" type="button" aria-label="Hide quest panel" onClick={() => setQuestsOpen(false)}>×</button>
           <div className="drawer-eyebrow">ISLAND {String(selectedIsland.number + 1).padStart(2, "0")} · EXPEDITION NOTES</div>
