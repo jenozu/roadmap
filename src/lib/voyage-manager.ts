@@ -18,6 +18,7 @@ export function readFleet(saved: string | null, starter: Project): Project[] {
         const c = candidate as Project;
         const valid = validateProject(c);
         if (typeof c.name === "string" && c.name.trim()) valid.name = c.name.trim().slice(0, 80);
+        if (typeof c.id === "string" && /^[a-z0-9-]+$/.test(c.id)) valid.id = c.id;
         found.set(canonicalRepo(valid.repo), valid);
       } catch { /* Ignore invalid imported or outdated entries. */ }
     }
