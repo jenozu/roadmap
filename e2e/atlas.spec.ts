@@ -125,6 +125,6 @@ test("a second voyage using the same repository is rejected before saving", asyn
   await page.getByRole("button", { name: "Chart a new voyage" }).click();
   await page.getByLabel("Repository", { exact: true }).fill("JENOZU/TRADE-ALERTS");
   await page.getByRole("button", { name: "Add voyage" }).click();
-  await expect(page.getByRole("alert")).toContainText("already in your fleet");
+  await expect(page.locator(".add-form .form-error")).toContainText("already in your fleet");
   await expect(page.locator(".fleet-entry")).toHaveCount(1);
 });
