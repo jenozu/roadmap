@@ -140,6 +140,12 @@ test("voyage actions are inline pencil and trash icons beside the project name",
   expect(nameBox).not.toBeNull();
   expect(iconsBox).not.toBeNull();
   expect(iconsBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width - 2);
+  expect(Math.abs((nameBox!.y + nameBox!.height / 2) - (iconsBox!.y + iconsBox!.height / 2))).toBeLessThan(4);
+  for (const icon of await row.locator(".fleet-entry-icons svg").all()) {
+    const box = await icon.boundingBox();
+    expect(box!.width).toBeLessThanOrEqual(20);
+    expect(box!.height).toBeLessThanOrEqual(20);
+  }
   await row.getByRole("button", { name: "Edit voyage Trade Alerts" }).click();
   await expect(page.getByRole("button", { name: "Save voyage" })).toBeVisible();
 });

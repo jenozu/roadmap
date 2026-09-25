@@ -560,7 +560,7 @@ export default function Dashboard() {
                   <button type="button" className="fleet-icon-button"
                     aria-label={"Edit voyage " + project.name} title={"Edit " + project.name}
                     onClick={() => beginEditing(project)}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8"
+                    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="1.8"
                       strokeLinecap="round" strokeLinejoin="round">
                       <path d="M4 20l4.2-1 9.9-9.9a1.8 1.8 0 0 0 0-2.6l-.6-.6a1.8 1.8 0 0 0-2.6 0L5 15.8 4 20zM13.5 6.5l4 4" />
                     </svg>
@@ -568,7 +568,7 @@ export default function Dashboard() {
                   <button type="button" className="fleet-icon-button danger"
                     aria-label={"Remove voyage " + project.name} title={"Remove " + project.name}
                     onClick={() => { setRemovingId(project.id); if (editingId === project.id) closeForm(); }}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8"
+                    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="1.8"
                       strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 7h14M9 7V5.8c0-.4.3-.8.8-.8h4.4c.5 0 .8.4.8.8V7m-8.5 0 .7 11.2c0 .9.7 1.6 1.6 1.6h5.4c.9 0 1.6-.7 1.6-1.6L17 7M10 11.2v5.2M14 11.2v5.2" />
                     </svg>

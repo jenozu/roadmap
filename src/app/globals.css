@@ -230,3 +230,16 @@
  .fleet-entry-icons{padding-right:5px}
  .remove-confirm{margin:4px}
 }
+
+/* A real two-column row: compact icon controls stay to the RIGHT of the
+   voyage name, even if text truncates in the narrow sidebar. */
+.fleet-entry-row{display:grid;grid-template-columns:minmax(0,1fr) 54px;align-items:center;width:100%;min-width:0;gap:0}
+.fleet-entry-row > .project-choice{display:flex;width:auto;min-width:0;max-width:100%;align-items:center;overflow:hidden}
+.fleet-entry-row > .project-choice .project-details{min-width:0;overflow:hidden}
+.fleet-entry-row > .project-choice .project-details strong,
+.fleet-entry-row > .project-choice .project-details small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fleet-entry-row > .fleet-entry-icons{display:flex;flex-wrap:nowrap;justify-self:end;align-items:center;gap:0;padding:0 2px 0 0;min-width:0}
+.fleet-entry-row .fleet-icon-button{flex:0 0 26px;width:26px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:#d8caa6;padding:4px}
+.fleet-entry-row .fleet-icon-button svg{width:17px;height:17px;max-width:17px;max-height:17px;overflow:visible}
+.fleet-entry-row .fleet-icon-button:hover,.fleet-entry-row .fleet-icon-button:focus-visible{background:#496459;color:#fff2d2}
+.fleet-entry-row .fleet-icon-button.danger:hover,.fleet-entry-row .fleet-icon-button.danger:focus-visible{background:#76524b;color:#fff2d2}
