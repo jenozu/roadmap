@@ -128,3 +128,18 @@ test("a second voyage using the same repository is rejected before saving", asyn
   await expect(page.locator(".add-form .form-error")).toContainText("already in your fleet");
   await expect(page.locator(".fleet-entry")).toHaveCount(1);
 });
+
+test("voyage actions are inline pencil and trash icons beside the project name", async ({ page }) => {
+  const entry = page.locator(".fleet-entry").first();
+  const row = entry.locator(".fleet-entry-row");
+  await expect(row.locator(".fleet-entry-icons button")).toHaveCount(2);
+  await expect(row.getByRole("button", { name: "Edit voyage Trade Alerts" }).locator("svg")).toBeVisible();
+  await expect(row.getByRole("button", { name: "Remove voyage Trade Alerts" }).locator("svg")).toBeVisible();
+  const nameBox = await row.locator(".project-choice").boundingBox();
+  const iconsBox = await row.locator(".fleet-entry-icons").boundingBox();
+  expect(nameBox).not.toBeNull();
+  expect(iconsBox).not.toBeNull();
+  expect(iconsBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width - 2);
+  await row.getByRole("button", { name: "Edit voyage Trade Alerts" }).click();
+  await expect(page.getByRole("button", { name: "Save voyage" })).toBeVisible();
+});
