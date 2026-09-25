@@ -193,14 +193,23 @@
    allowing keyboard users to edit or remove without switching projects. */
 .fleet-entry{border:1px solid transparent;border-radius:4px;margin-bottom:5px}
 .fleet-entry.fleet-selected{border-color:#5a7167;background:#334e48}
-.fleet-entry .project-choice{margin:0;border-color:transparent;padding-bottom:7px}
-.fleet-entry-actions{display:flex;gap:8px;padding:0 10px 10px 57px}
-.fleet-entry-actions button{
-  font:11px Arial,sans-serif;color:#dfcda9;border:1px solid #7a897d;
-  border-radius:2px;background:#29403b;padding:5px 9px;min-height:28px;
+.fleet-entry-row{display:flex;align-items:center;gap:0;min-width:0}
+.fleet-entry .project-choice{flex:1 1 auto;min-width:0;margin:0;border-color:transparent;padding:11px 2px 11px 7px;gap:6px}
+.fleet-entry .project-crest{flex:0 0 24px;width:24px;font-size:20px}
+.project-details{flex:1 1 auto;min-width:0}
+.project-details strong,.project-details small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fleet-entry-icons{display:flex;flex:none;align-items:center;gap:2px;padding-right:5px}
+.fleet-icon-button{
+  display:grid;place-items:center;width:29px;height:32px;padding:5px;
+  background:transparent;color:#dfcda9;border:1px solid transparent;border-radius:3px
 }
-.fleet-entry-actions button:hover,.fleet-entry-actions button:focus-visible{background:#45635a}
-.fleet-entry-actions button:last-child{color:#e5bfae}
+.fleet-icon-button svg{display:block;width:18px;height:18px}
+.fleet-icon-button:hover,.fleet-icon-button:focus-visible{
+  background:#45635a;border-color:#84988b;color:#f7e9cb
+}
+.fleet-icon-button.danger:hover,.fleet-icon-button.danger:focus-visible{
+  background:#6b413c;border-color:#b88d86;color:#fff2e6
+}
 .remove-confirm{
   padding:11px;background:#f4e6cc;color:#493c31;border-radius:3px;
   margin:0 8px 9px;
@@ -218,6 +227,6 @@
 .empty-compass{font-size:66px;color:#ae9464}
 @media(max-width:760px){
  .fleet-entry{min-width:190px}
- .fleet-entry-actions{padding-left:12px}
+ .fleet-entry-icons{padding-right:5px}
  .remove-confirm{margin:4px}
 }
