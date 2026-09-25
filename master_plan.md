@@ -36,6 +36,15 @@
 - [x] Run automated Chromium interaction tests covering full-window view, whole-map panning and draggable islands (GitHub Actions 36051940319 passed)
 - [ ] Visually inspect the latest Vercel deployment and manually verify touch dragging on physical mobile devices
 
+## M1.4: Fleet editing and recovery
+- [x] Add separate Edit and Remove controls for every saved voyage
+- [x] Prefill an editable form with display name, repository, branch and Markdown roadmap path
+- [x] Reject invalid paths and duplicate repository entries without modifying the fleet
+- [x] Require confirmation before removing a voyage; never mutate its GitHub repository
+- [x] Preserve legacy stored voyages, allow the initial voyage to be removed, and keep an intentionally empty fleet after reload
+- [x] Add helper unit tests and Chromium browser regressions for editing, removal and persistence
+- [ ] Manually inspect the deployed fleet controls on desktop and mobile
+
 ## M2: GitHub-backed workflow
 - [ ] Create a Neon PostgreSQL database for user projects, map settings, task snapshots and an event ledger
 - [ ] Configure GitHub App with least-privilege repository access

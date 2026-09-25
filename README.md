@@ -61,3 +61,9 @@ Choose **Full screen** from the atlas toolbar to expand the map over the entire 
 The map now uses a **screen-space camera**, not the SVG element's own scrollbars. Drag empty water in any direction to pan **even at Whole map overview scale**, drag an island to change its saved chart position, wheel/trackpad to travel, Ctrl+wheel (trackpad pinch) to zoom at the pointer, and +/- to zoom about the visible center. The normal view starts closer to your first unfinished island so labels aren't microscopic. Whole map remains one click away.
 
 Camera math and overview/resize interactions have dedicated regression tests in `tests/map-camera.test.mjs`; direct visual/browser verification of the Vercel deployment is still a manual check.
+
+## Managing voyages
+
+In the fleet sidebar, use **Edit** beside an existing voyage to correct its display name, GitHub `owner/repo`, branch or Markdown roadmap path. Correcting a repository name replaces that voyage rather than adding a duplicate; identical repository entries are prevented. Changes are saved to browser-local storage, and the edited voyage is immediately reloaded. If GitHub returns 404, check that the repository is **public** and that the exact Markdown file and branch exist.
+
+Use **Remove** to open a confirmation panel. Removing a voyage deletes only its entry in this browser; it **does not delete or edit the GitHub repository**. You can remove the initial Trade Alerts voyage too, and an intentionally empty fleet stays empty after refreshing. Existing locally stored voyage lists remain compatible with this update. Browser-local map positions and checklist history are not erased by removing a voyage, so re-adding the same public repository can restore them.
