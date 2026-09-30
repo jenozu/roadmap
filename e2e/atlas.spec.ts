@@ -65,7 +65,7 @@ test("full-window mode expands the viewport and preserves interactive island que
   await current.dblclick();
   await expect(page.locator('[data-island-view="phase-10"]')).toBeVisible();
   await expect(page.locator(".current-task-kicker")).toHaveText("CURRENT QUEST");
-  await page.getByRole("button", { name: "← Back to world map" }).first().click();
+  await page.getByRole("button", { name: "← World map" }).click();
   await expect(page.locator('[data-island-view="phase-10"]')).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(panel).not.toHaveClass(/atlas-fullscreen/);
@@ -165,7 +165,6 @@ test("double-clicking an island opens checkpoint map focused on the first incomp
 test("near-live roadmap polling advances current checkpoint after GitHub source changes", async ({ page }) => {
   let calls = 0;
   await page.unroute("**/api/project?*");
-  await page.clock.install();
   await page.route("**/api/project?*", async route => {
     calls += 1;
     const fixture = projectFixture();
@@ -179,6 +178,7 @@ test("near-live roadmap polling advances current checkpoint after GitHub source 
   await page.reload();
   await page.locator('[data-island="phase-10"]').dblclick();
   await expect(page.locator(".current-task-card h3")).toContainText("Inspect island 10");
-  await page.clock.fastForward("00:00:11");
+  await page.waitForTimeout(10_500);
+  await expect.poll(() => calls).toBeGreaterThan(1);
   await expect(page.locator(".current-task-kicker")).toHaveText("ISLAND COMPLETE");
 });
