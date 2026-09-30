@@ -6,6 +6,7 @@ import type { Island, Task } from "@/lib/roadmap";
 import { layoutForCount, clampIsland, type Point } from "@/lib/map-layout";
 import { centerAt, visibleCenter, fitCamera, openingScale, zoomAround, panCamera } from "@/lib/map-camera";
 import IslandSketch from "@/components/island-sketch";
+import IslandQuestMap from "@/components/island-quest-map";
 import { resolveRoadmapHref } from "@/lib/roadmap-links";
 import { captureProgress, diffProgress, type ProgressChange, type ProgressState } from "@/lib/progress-diff";
 import { fleetStorageKey, readFleet, saveVoyage, removeVoyage } from "@/lib/voyage-manager";
@@ -58,6 +59,7 @@ export default function Dashboard() {
   const [copiedNotice, setCopiedNotice] = useState<{ id: string; ok: boolean } | null>(null);
   const [tick, setTick] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
+  const [islandViewId, setIslandViewId] = useState<string | null>(null);
   const [questsOpen, setQuestsOpen] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const questScroll = useRef<HTMLDivElement>(null);
@@ -176,10 +178,36 @@ export default function Dashboard() {
     return () => controller.abort();
   }, [load, tick, active.repo, fleetReady, projects.length]);
 
+  // Lightweight near-live watch: refresh the public Markdown source every
+  // 10 seconds without spending GitHub commits-API quota.
   useEffect(() => {
-    const timer = setInterval(() => setTick(n => n + 1), 90000);
-    return () => clearInterval(timer);
-  }, []);
+    if (!fleetReady || projects.length === 0) return;
+    let cancelled = false;
+    let controller: AbortController | undefined;
+    const refresh = async () => {
+      if (document.visibilityState !== "visible") return;
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const query = new URLSearchParams({
+          repo: active.repo, branch: active.branch, path: active.path, name: active.name, activity: "0"
+        });
+        const response = await fetch("/api/project?" + query.toString(), { cache: "no-store", signal: controller.signal });
+        if (!response.ok || cancelled) return;
+        const body = await response.json() as ProjectSnapshot;
+        setSnapshot(previous => ({ ...body, activity: previous?.activity || [] }));
+      } catch { /* polling failure is non-fatal */ }
+    };
+    const timer = window.setInterval(() => void refresh(), 10000);
+    const onFocus = () => void refresh();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      controller?.abort();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [active.repo, active.branch, active.path, active.name, fleetReady, projects.length]);
 
   const islands = snapshot?.voyage.islands || [];
   const current = islands.find(i => i.tasks.length > 0 && i.progress < 100)?.number ?? islands[islands.length - 1]?.number ?? -1;
@@ -191,6 +219,7 @@ export default function Dashboard() {
   );
   const journeyPath = inkPath(locations);
   const selectedIsland = islands.find(i => i.id === selected) || null;
+  const islandView = islands.find(i => i.id === islandViewId) || null;
   const xp = snapshot?.voyage.xp || 0;
   const currentLevelXp = xp % 500;
   const projectFileUrl = "https://github.com/" + active.repo + "/blob/" + encodeURIComponent(active.branch) + "/" + active.path;
@@ -401,6 +430,18 @@ export default function Dashboard() {
     setExpandedTask(null);
   }
 
+  function enterIsland(id: string) {
+    setSelected(id);
+    setIslandViewId(id);
+    setQuestsOpen(false);
+    setExpandedTask(null);
+  }
+
+  function leaveIsland() {
+    setIslandViewId(null);
+    setQuestsOpen(false);
+  }
+
   function toggleQuests() {
     if (!selected && islands.length > 0) {
       setSelected(islands.find(island => island.progress < 100)?.id || islands[0].id);
@@ -451,7 +492,7 @@ export default function Dashboard() {
   function onUp(event: ReactPointerEvent<HTMLDivElement>) {
     const gesture = drag.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (gesture.id && !gesture.moved) selectIsland(gesture.id);
+    if (gesture.id && !gesture.moved) setSelected(gesture.id);
     if (gesture.id && gesture.moved) {
       try { localStorage.setItem(layoutPrefix + active.repo, JSON.stringify(positionsRef.current)); } catch { /* non-fatal */ }
     }
@@ -635,30 +676,35 @@ export default function Dashboard() {
           <div className="stat stat-level"><small>CAPTAIN&apos;S LEVEL</small><strong>{snapshot?.voyage.level ?? "—"}</strong><div className="level-track"><span style={{ width: currentLevelXp / 5 + "%" }} /></div><p>{currentLevelXp} / 500 XP to next level</p></div>
         </section>
 
-        <section className={"atlas-panel" + (fullscreen ? " atlas-fullscreen" : "")} aria-label="Interactive voyage map">
+        <section className={"atlas-panel" + (fullscreen ? " atlas-fullscreen" : "") + (islandView ? " island-mode" : "")} aria-label="Interactive voyage map">
           <div className="atlas-top">
-            <div><span className="eyebrow">YOUR CHARTED COURSE</span><h2>The expedition map</h2></div>
+            <div><span className="eyebrow">{islandView ? "LOCAL EXPEDITION CHART" : "YOUR CHARTED COURSE"}</span><h2>{islandView ? islandView.name : "The expedition map"}</h2></div>
             <div className="map-actions">
-              <span className="sync-stamp">{snapshot ? "Last checked " + new Date(snapshot.updatedAt).toLocaleTimeString() : "Awaiting chart"}</span>
-              <button type="button" aria-label="Zoom out" onClick={() => changeZoom(-.14)}>−</button>
-              <span>{Math.round(zoom * 100)}%</span>
-              <button type="button" aria-label="Zoom in" onClick={() => changeZoom(.14)}>＋</button>
-              <button type="button" onClick={fitMap}>Whole map</button>
-              <button type="button" disabled={!islands.length} onClick={() => {
-                const next = islands.find(island => island.tasks.length > 0 && island.progress < 100) || islands[islands.length - 1];
-                if (next) focusOnIsland(next.id);
-              }}>Find my ship</button>
-              <select className="island-jump" aria-label="Navigate to an island" defaultValue="" key={active.repo + islands.length}
-                onChange={event => { if (event.target.value) focusOnIsland(event.target.value, true); event.target.value = ""; }}>
-                <option value="">Jump to island…</option>
-                {islands.map(island => <option key={island.id} value={island.id}>{island.number + 1}. {island.name}</option>)}
-              </select>
-              <button type="button" onClick={resetLayout}>Reset islands</button>
+              <span className="sync-stamp">{snapshot ? "Live watch · " + new Date(snapshot.updatedAt).toLocaleTimeString() : "Awaiting chart"}</span>
+              {islandView ? <>
+                <button type="button" onClick={leaveIsland}>← World map</button>
+                <button type="button" disabled={loading} onClick={() => setTick(n => n + 1)}>↻ Sync now</button>
+              </> : <>
+                <button type="button" aria-label="Zoom out" onClick={() => changeZoom(-.14)}>−</button>
+                <span>{Math.round(zoom * 100)}%</span>
+                <button type="button" aria-label="Zoom in" onClick={() => changeZoom(.14)}>＋</button>
+                <button type="button" onClick={fitMap}>Whole map</button>
+                <button type="button" disabled={!islands.length} onClick={() => {
+                  const next = islands.find(island => island.tasks.length > 0 && island.progress < 100) || islands[islands.length - 1];
+                  if (next) focusOnIsland(next.id);
+                }}>Find my ship</button>
+                <select className="island-jump" aria-label="Navigate to an island" defaultValue="" key={active.repo + islands.length}
+                  onChange={event => { if (event.target.value) enterIsland(event.target.value); event.target.value = ""; }}>
+                  <option value="">Enter island…</option>
+                  {islands.map(island => <option key={island.id} value={island.id}>{island.number + 1}. {island.name}</option>)}
+                </select>
+                <button type="button" onClick={resetLayout}>Reset islands</button>
+                <button className="map-quest-toggle" aria-expanded={questsOpen} onClick={toggleQuests}>
+                  {questsOpen ? "Hide quests" : "Show quests"}
+                </button>
+              </>}
               <button type="button" className="fullscreen-toggle" aria-pressed={fullscreen} onClick={toggleFullscreen}>
                 {fullscreen ? "⤡ Exit full screen" : "⛶ Full screen"}
-              </button>
-              <button className="map-quest-toggle" aria-expanded={questsOpen} onClick={toggleQuests}>
-                {questsOpen ? "Hide quests" : "Show quests"}
               </button>
             </div>
           </div>
@@ -667,6 +713,12 @@ export default function Dashboard() {
             No islands were found. Your Markdown needs headings such as <code># Phase 0 — Planning</code> or <code>## M1: Planning</code>.
           </div>}
           {!error && loading && !snapshot && <div className="loading-banner">Unrolling the charts and finding your islands…</div>}
+          {islandView ? <IslandQuestMap
+            island={islandView}
+            sourceUrl={projectFileUrl}
+            syncedAt={snapshot?.updatedAt}
+            onBack={leaveIsland}
+          /> : <>
           <div className="map-scroll" ref={mapViewport} tabIndex={0} role="region"
             aria-label="Pan and zoom the project archipelago" onKeyDown={onMapKeyDown}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}>
@@ -715,7 +767,11 @@ export default function Dashboard() {
                 return (
                   <g key={island.id} data-island={island.id} transform={"translate(" + pos.x + " " + pos.y + ")"}
                     tabIndex={0} role="button" aria-label={"Island " + island.number + ": " + island.name + ", " + island.progress + "% completed"}
-                    onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectIsland(island.id); } }}
+                    onDoubleClick={() => enterIsland(island.id)}
+                    onKeyDown={event => {
+                      if (event.key === "Enter") { event.preventDefault(); enterIsland(island.id); }
+                      else if (event.key === " ") { event.preventDefault(); setSelected(island.id); }
+                    }}
                     className={"map-island " + status + (chosen ? " chosen" : "")}>
                     {chosen && <ellipse rx="91" ry="74" cy="-1" fill="none" stroke="#7c5734" strokeWidth="1.4" strokeDasharray="4 7" />}
                     <IslandSketch variant={index} state={status} isFinal={index === islands.length - 1} />
@@ -740,7 +796,8 @@ export default function Dashboard() {
               })()}
             </svg>
           </div>
-          <div className="map-bottom"><span><i className="legend-dot done-dot" />Completed</span><span><i className="legend-dot current-dot" />Your current island</span><span><i className="legend-dot future-dot" />Upcoming</span><span className="drag-hint">Drag anywhere to pan · Wheel/trackpad to travel · Ctrl + wheel to zoom · Drag islands to arrange · Click to explore</span></div>
+          </>}
+          <div className="map-bottom"><span><i className="legend-dot done-dot" />Completed</span><span><i className="legend-dot current-dot" />Your current island</span><span><i className="legend-dot future-dot" />Upcoming</span><span className="drag-hint">Double-click an island to enter · Single-click selects · Drag to pan · Ctrl + wheel to zoom</span></div>
         </section>
 
         <section className="below-grid">
@@ -775,7 +832,7 @@ export default function Dashboard() {
         </>}
       </main>
 
-      {projects.length > 0 && islands.length > 0 && <button
+      {!islandView && projects.length > 0 && islands.length > 0 && <button
         type="button"
         className={"quest-edge-tab " + (questsOpen && selectedIsland ? "tab-open" : "tab-closed")}
         aria-controls="quest-panel"
@@ -785,7 +842,7 @@ export default function Dashboard() {
         <span aria-hidden="true" className="quest-tab-symbol">{questsOpen && selectedIsland ? "›" : "‹"}</span>
         <span>{questsOpen && selectedIsland ? "HIDE QUESTS" : "OPEN QUESTS"}</span>
       </button>}
-      {projects.length > 0 && questsOpen && selectedIsland && <aside id="quest-panel" className="quest-drawer" aria-label="Selected island quests">
+      {!islandView && projects.length > 0 && questsOpen && selectedIsland && <aside id="quest-panel" className="quest-drawer" aria-label="Selected island quests">
         <div className="drawer-fixed">
           <button className="drawer-close" type="button" aria-label="Hide quest panel" onClick={() => setQuestsOpen(false)}>×</button>
           <div className="drawer-eyebrow">ISLAND {String(selectedIsland.number + 1).padStart(2, "0")} · EXPEDITION NOTES</div>
