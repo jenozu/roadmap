@@ -62,10 +62,11 @@ test("full-window mode expands the viewport and preserves interactive island que
 
   await page.getByRole("button", { name: "Find my ship" }).click();
   const current = page.locator('[data-island="phase-10"]');
-  await current.click();
-  await expect(page.locator("#quest-panel")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#quest-panel")).toHaveCount(0);
+  await current.dblclick();
+  await expect(page.locator('[data-island-view="phase-10"]')).toBeVisible();
+  await expect(page.locator(".current-task-kicker")).toHaveText("CURRENT QUEST");
+  await page.getByRole("button", { name: "← Back to world map" }).first().click();
+  await expect(page.locator('[data-island-view="phase-10"]')).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(panel).not.toHaveClass(/atlas-fullscreen/);
 });
@@ -148,4 +149,36 @@ test("voyage actions are inline pencil and trash icons beside the project name",
   }
   await row.getByRole("button", { name: "Edit voyage Trade Alerts" }).click();
   await expect(page.getByRole("button", { name: "Save voyage" })).toBeVisible();
+});
+
+test("double-clicking an island opens checkpoint map focused on the first incomplete task", async ({ page }) => {
+  const current = page.locator('[data-island="phase-10"]');
+  await current.dblclick();
+  const island = page.locator('[data-island-view="phase-10"]');
+  await expect(island).toBeVisible();
+  await expect(island.locator("[data-checkpoint]")).toHaveCount(2);
+  await expect(island.locator(".local-checkpoint.current")).toHaveCount(1);
+  await expect(island.locator(".current-task-card h3")).toContainText("Inspect island 10");
+  await expect(page.locator("#quest-panel")).toHaveCount(0);
+});
+
+test("near-live roadmap polling advances current checkpoint after GitHub source changes", async ({ page }) => {
+  let calls = 0;
+  await page.unroute("**/api/project?*");
+  await page.route("**/api/project?*", async route => {
+    calls += 1;
+    const fixture = projectFixture();
+    if (calls > 1) {
+      fixture.voyage.islands[10].tasks[1].done = true;
+      fixture.voyage.islands[10].completed = 2;
+      fixture.voyage.islands[10].progress = 100;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(fixture) });
+  });
+  await page.reload();
+  await page.locator('[data-island="phase-10"]').dblclick();
+  await expect(page.locator(".current-task-card h3")).toContainText("Inspect island 10");
+  await page.clock.install();
+  await page.clock.fastForward("00:00:11");
+  await expect(page.locator(".current-task-kicker")).toHaveText("ISLAND COMPLETE");
 });
