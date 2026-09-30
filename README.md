@@ -67,3 +67,11 @@ Camera math and overview/resize interactions have dedicated regression tests in 
 In the fleet sidebar, use **Edit** beside an existing voyage to correct its display name, GitHub `owner/repo`, branch or Markdown roadmap path. Correcting a repository name replaces that voyage rather than adding a duplicate; identical repository entries are prevented. Changes are saved to browser-local storage, and the edited voyage is immediately reloaded. If GitHub returns 404, check that the repository is **public** and that the exact Markdown file and branch exist.
 
 Use **Remove** to open a confirmation panel. Removing a voyage deletes only its entry in this browser; it **does not delete or edit the GitHub repository**. You can remove the initial Trade Alerts voyage too, and an intentionally empty fleet stays empty after refreshing. Existing locally stored voyage lists remain compatible with this update. Browser-local map positions and checklist history are not erased by removing a voyage, so re-adding the same public repository can restore them.
+
+## Island checkpoint mode
+
+Double-click any island on the world map to enter a **local island chart**. Every unchecked/checkmarked roadmap item in that milestone becomes a checkpoint along the island trail. Completed checkpoints are marked, the **first unchecked task is the current quest**, and upcoming checkpoints remain muted. The side panel in this view shows only the focused/current task and its nested roadmap instructions, avoiding the full scrolling quest list.
+
+When every checkpoint is complete, the island's **final clue** unlocks and the interface directs you back to the world map to continue to the next island.
+
+For public repositories, Voyages now performs a lightweight roadmap refresh every **10 seconds while the tab is visible**, plus an immediate refresh when the window regains focus. That means a pushed checklist update normally advances the current task within about 10 seconds. This is near-live polling, not a true GitHub push webhook; true instant delivery remains part of the GitHub App/Neon phase.

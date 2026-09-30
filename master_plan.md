@@ -45,6 +45,17 @@
 - [x] Add helper unit tests and Chromium browser regressions for editing, removal and persistence
 - [ ] Manually inspect the deployed fleet controls on desktop and mobile
 
+## M1.5: Island checkpoint maps and current-task focus
+- [x] Double-click a world-map island to enter a local hand-drawn island chart
+- [x] Turn roadmap tasks into numbered checkpoints with completed, current and upcoming states
+- [x] Keep only one focused task card visible instead of forcing the full quest list open
+- [x] Unlock a final clue marker after all tasks on an island are complete
+- [x] Return to the world map to proceed to the next island
+- [x] Poll public roadmap Markdown every 10 seconds while the tab is visible and immediately refocus the first unchecked task when a sync changes status
+- [x] Avoid repeated GitHub commits-API calls during live polling by using lightweight roadmap-only refreshes
+- [x] Add layout/unit tests and browser tests for island drill-down and current-task advancement
+- [ ] Add true push-triggered webhook/SSE updates once authenticated GitHub + Neon event infrastructure is available
+
 ## M2: GitHub-backed workflow
 - [ ] Create a Neon PostgreSQL database for user projects, map settings, task snapshots and an event ledger
 - [ ] Configure GitHub App with least-privilege repository access

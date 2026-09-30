@@ -4,9 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "src/components/dashboard.tsx"
+      - "src/components/**"
       - "src/app/globals.css"
       - "src/lib/map-camera.ts"
+      - "src/lib/island-quest-layout.ts"
+      - "src/lib/github.ts"
+      - "src/app/api/project/route.ts"
       - "e2e/**"
       - "playwright.config.ts"
       - "package.json"
