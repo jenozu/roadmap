@@ -243,3 +243,45 @@
 .fleet-entry-row .fleet-icon-button svg{width:17px;height:17px;max-width:17px;max-height:17px;overflow:visible}
 .fleet-entry-row .fleet-icon-button:hover,.fleet-entry-row .fleet-icon-button:focus-visible{background:#496459;color:#fff2d2}
 .fleet-entry-row .fleet-icon-button.danger:hover,.fleet-entry-row .fleet-icon-button.danger:focus-visible{background:#76524b;color:#fff2d2}
+
+/* Island drill-down: tasks become checkpoints instead of a scrolling sidebar. */
+.island-mode .map-bottom{display:none}
+.island-view{background:#d9d0ab;min-height:620px}
+.island-view-bar{display:none}
+.island-local-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;min-height:620px}
+.island-local-scroll{overflow:auto;background:#d9d0ab;border-right:1px solid #bcae86;display:flex;justify-content:center;align-items:flex-start}
+.island-local-map{display:block;width:min(100%,1040px);height:auto;min-width:760px}
+.local-checkpoint{cursor:pointer;outline:none}
+.local-checkpoint .checkpoint-circle{fill:#aaa083;stroke:#625c45;stroke-width:2}
+.local-checkpoint.done .checkpoint-circle{fill:#668064;stroke:#425c43}
+.local-checkpoint.current .checkpoint-circle{fill:#3f7d8e;stroke:#285968}
+.local-checkpoint.focused .checkpoint-circle{stroke-width:3}
+.checkpoint-number{font:700 13px Arial,sans-serif;fill:#fff9e7;pointer-events:none}
+.local-checkpoint.upcoming .checkpoint-number{fill:#494638}
+.local-checkpoint:focus-visible circle:first-child{stroke:#274f62;stroke-width:3}
+.clue-marker{color:#756a50;font:10px Arial,sans-serif;letter-spacing:.13em}
+.clue-marker.unlocked{color:#45694e}
+.current-task-card{background:#fbf7e9;padding:27px 25px;border-left:1px solid #e5dbc2;overflow:auto;max-height:760px}
+.current-task-kicker{font:10px Arial,sans-serif;letter-spacing:.19em;color:#9b7844;margin-bottom:10px}
+.current-task-card h3{font-size:25px;font-weight:normal;line-height:1.25;margin:0 0 13px;color:#31473f}
+.current-task-card>p,.current-task-empty{font:12px/1.65 Arial,sans-serif;color:#777467}
+.current-task-meta{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:17px}
+.current-task-meta span{font:10px Arial,sans-serif;padding:5px 7px;border:1px solid #d1c4a7;background:#f2ead5;color:#6e6758}
+.current-task-instructions{font:12px/1.65 Arial,sans-serif;color:#4e514a;border-top:1px solid #e3d8bd;border-bottom:1px solid #e3d8bd;padding:13px 0;margin:12px 0}
+.current-task-instructions p:first-child{margin-top:0}.current-task-instructions p:last-child{margin-bottom:0}
+.current-task-instructions code{font-size:11px;background:#eee5d0;padding:1px 3px}
+.task-source-button{display:inline-block;margin-top:12px;font:11px Arial,sans-serif;color:#695634;text-decoration:underline}
+.clue-box{margin:18px 0;padding:14px;border:1px dashed #8e7a54;background:#f2e8cc;font:12px/1.55 Arial,sans-serif;color:#4d604b}
+.live-sync-dot{color:#527d59;font-size:12px}
+.island-view-actions{font:10px Arial,sans-serif;color:#747264;display:flex;align-items:center;gap:8px}
+@media(max-width:980px){
+ .island-local-layout{grid-template-columns:1fr}
+ .current-task-card{max-height:none;border-left:0;border-top:1px solid #d5c7a6}
+ .island-local-scroll{border-right:0}
+}
+@media(max-width:760px){
+ .island-view{min-height:500px}
+ .island-local-layout{min-height:500px}
+ .island-local-map{min-width:690px}
+ .current-task-card{padding:20px 17px}
+}
