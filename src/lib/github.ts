@@ -31,7 +31,7 @@ export function validateProject(input: Partial<Project>): Project {
   };
 }
 
-export async function fetchProject(projectInput: Partial<Project>): Promise<ProjectSnapshot> {
+export async function fetchProject(projectInput: Partial<Project>, options: { includeActivity?: boolean } = {}): Promise<ProjectSnapshot> {
   const project = validateProject(projectInput);
   // Public repositories only. Future private access will require authentication
   // and an explicit repository allowlist before any read token is introduced.
@@ -56,7 +56,7 @@ export async function fetchProject(projectInput: Partial<Project>): Promise<Proj
     parts.map(encodeURIComponent).join("/") + "/commits?path=" +
     encodeURIComponent(project.path) + "&sha=" + encodeURIComponent(project.branch) + "&per_page=6";
   let activity: CommitActivity[] = [];
-  try {
+  if (options.includeActivity !== false) try {
     const commitsResponse = await fetch(commitsUrl, {
       headers: { Accept: "application/vnd.github+json" },
       cache: "no-store",

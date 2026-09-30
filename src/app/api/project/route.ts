@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       branch: query.get("branch") || "main",
       path: query.get("path") || "master_list.md",
       name: query.get("name") || undefined
-    });
+    }, { includeActivity: query.get("activity") !== "0" });
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to import this roadmap.";
