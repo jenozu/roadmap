@@ -81,6 +81,7 @@ export default function Dashboard() {
   const [addError, setAddError] = useState("");
   const mapViewport = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
+  const lastIslandTap = useRef<{ id: string; at: number } | null>(null);
   const positionsRef = useRef<Record<string, Location>>({});
 
   useEffect(() => {
@@ -492,7 +493,17 @@ export default function Dashboard() {
   function onUp(event: ReactPointerEvent<HTMLDivElement>) {
     const gesture = drag.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (gesture.id && !gesture.moved) setSelected(gesture.id);
+    if (gesture.id && !gesture.moved) {
+      const now = Date.now();
+      const prior = lastIslandTap.current;
+      if (prior?.id === gesture.id && now - prior.at < 420) {
+        lastIslandTap.current = null;
+        enterIsland(gesture.id);
+      } else {
+        lastIslandTap.current = { id: gesture.id, at: now };
+        setSelected(gesture.id);
+      }
+    }
     if (gesture.id && gesture.moved) {
       try { localStorage.setItem(layoutPrefix + active.repo, JSON.stringify(positionsRef.current)); } catch { /* non-fatal */ }
     }
@@ -767,7 +778,6 @@ export default function Dashboard() {
                 return (
                   <g key={island.id} data-island={island.id} transform={"translate(" + pos.x + " " + pos.y + ")"}
                     tabIndex={0} role="button" aria-label={"Island " + island.number + ": " + island.name + ", " + island.progress + "% completed"}
-                    onDoubleClick={() => enterIsland(island.id)}
                     onKeyDown={event => {
                       if (event.key === "Enter") { event.preventDefault(); enterIsland(island.id); }
                       else if (event.key === " ") { event.preventDefault(); setSelected(island.id); }
