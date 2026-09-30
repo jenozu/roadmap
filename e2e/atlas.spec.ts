@@ -165,6 +165,7 @@ test("double-clicking an island opens checkpoint map focused on the first incomp
 test("near-live roadmap polling advances current checkpoint after GitHub source changes", async ({ page }) => {
   let calls = 0;
   await page.unroute("**/api/project?*");
+  await page.clock.install();
   await page.route("**/api/project?*", async route => {
     calls += 1;
     const fixture = projectFixture();
@@ -178,7 +179,6 @@ test("near-live roadmap polling advances current checkpoint after GitHub source 
   await page.reload();
   await page.locator('[data-island="phase-10"]').dblclick();
   await expect(page.locator(".current-task-card h3")).toContainText("Inspect island 10");
-  await page.clock.install();
   await page.clock.fastForward("00:00:11");
   await expect(page.locator(".current-task-kicker")).toHaveText("ISLAND COMPLETE");
 });
