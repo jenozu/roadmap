@@ -18,7 +18,7 @@ export function checkpointLayout(count: number): { width: number; height: number
     const row = Math.floor(index / columns);
     const step = index % columns;
     const column = row % 2 === 0 ? step : columns - 1 - step;
-    const x = left + (columns === 1 ? usableWidth / 2 : column * (usableWidth / (columns - 1)));
+    const x = left + column * (usableWidth / (columns - 1));
     const y = top + row * 150 + Math.sin(index * 1.7) * 28;
     points.push({ index, x: Math.round(x), y: Math.round(y) });
   }
