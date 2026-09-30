@@ -15,3 +15,14 @@ test("current task is the first incomplete checkpoint", () => {
   assert.equal(currentTaskIndex([false,false]),0);
   assert.equal(currentTaskIndex([true,true]),1);
 });
+
+test("large task sets keep every checkpoint inside the expandable island bounds", () => {
+  for (const count of [12, 24, 40, 80]) {
+    const chart=checkpointLayout(count);
+    for (const point of chart.points) {
+      assert.ok(point.x >= 120 && point.x <= chart.width - 120);
+      assert.ok(point.y >= 120 && point.y <= chart.height - 180);
+    }
+    assert.ok(chart.height >= 620);
+  }
+});

@@ -37,6 +37,24 @@ export default function IslandQuestMap({ island, sourceUrl, syncedAt, onBack }: 
 
   const clue = { x: map.width / 2, y: map.height - 95 };
   const fullPath = routePath([...map.points, clue]);
+  const h = map.height;
+  // The island coastline expands with the number of task rows. The previous
+  // fixed 620px silhouette caused long checkpoint trails to spill into the sea.
+  const coast = [
+    "M 82 105",
+    "Q 165 32 300 76",
+    "Q 430 20 555 78",
+    "Q 715 28 875 82",
+    "Q 970 118 964 238",
+    "Q 950 330 964 " + Math.max(390, h * .42),
+    "L 964 " + Math.max(420, h - 245),
+    "Q 985 " + (h - 125) + " 858 " + (h - 68),
+    "Q 720 " + (h - 22) + " 585 " + (h - 72),
+    "Q 455 " + (h - 18) + " 315 " + (h - 66),
+    "Q 165 " + (h - 22) + " 88 " + (h - 132),
+    "Q 40 " + (h - 245) + " 75 " + (h - 355),
+    "Q 42 210 82 105 Z"
+  ].join(" ");
 
   return <div className="island-view" data-island-view={island.id}>
     <div className="island-view-bar">
@@ -62,14 +80,15 @@ export default function IslandQuestMap({ island, sourceUrl, syncedAt, onBack }: 
           </defs>
           <rect width={map.width} height={map.height} fill="#d9d0ab"/>
           <rect width={map.width} height={map.height} fill="url(#local-hatch)"/>
-          <path d={"M70 100 Q155 28 290 72 Q390 15 510 78 Q650 22 770 85 Q930 50 970 150 Q1015 265 930 360 Q986 480 858 535 Q744 603 623 550 Q500 625 389 556 Q245 606 157 526 Q50 457 94 340 Q30 222 70 100Z"}
-            fill="#beb792" stroke="#625b43" strokeWidth="3"/>
-          <path d="M150 390Q245 300 340 365T530 330T705 382T890 315" fill="none" stroke="#7c7557" strokeWidth="1.5" opacity=".35"/>
+          <path d={coast} fill="#beb792" stroke="#625b43" strokeWidth="3"/>
+          <path d={"M150 " + Math.round(h * .36) + " Q245 " + Math.round(h * .30) + " 340 " + Math.round(h * .36) +
+            " T530 " + Math.round(h * .33) + " T705 " + Math.round(h * .38) + " T890 " + Math.round(h * .31)}
+            fill="none" stroke="#7c7557" strokeWidth="1.5" opacity=".35"/>
           <path d={fullPath} fill="none" stroke="#76503a" strokeWidth="4" strokeDasharray="3 15" strokeLinecap="round"/>
           <g opacity=".35" stroke="#4f533e" fill="none">
             <path d="M132 246q28-64 57 0m-29-45v-54m0 7-28-18m28 18 29-22"/>
             <path d="M828 205l22-55 25 55m-37-24h48"/>
-            <path d="M470 490q26-34 52 0m-40 0v-36h28v36"/>
+            <path d={"M470 " + (h - 155) + " q26-34 52 0m-40 0v-36h28v36"}/>
           </g>
           {map.points.map((point, index) => {
             const task = island.tasks[index];
