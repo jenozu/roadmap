@@ -158,18 +158,24 @@ export default function Dashboard() {
         // Local history records when changes were detected, never the date
         // the associated work actually happened. GitHub is the source.
         try {
-          const key = body.project.repo + "@" + body.project.branch + "/" + body.project.path;
-          const now = captureProgress(body.voyage, body.updatedAt);
-          const priorText = localStorage.getItem(progressPrefix + key);
-          const previous = priorText ? JSON.parse(priorText) as ProgressState : undefined;
-          const incoming = previous && Array.isArray(previous.rows)
-            ? diffProgress(previous, now) : [];
-          const historyText = localStorage.getItem(historyPrefix + key);
-          const existing = historyText ? JSON.parse(historyText) as ProgressChange[] : [];
-          const history = [...incoming.reverse(), ...(Array.isArray(existing) ? existing : [])].slice(0, 30);
-          localStorage.setItem(progressPrefix + key, JSON.stringify(now));
-          localStorage.setItem(historyPrefix + key, JSON.stringify(history));
-          setRecentChanges(history);
+          if (body.repositoryVisibility === "private") {
+            // Do not persist private roadmap task titles or phase content in
+            // localStorage. Private content lives only in the active page state.
+            setRecentChanges([]);
+          } else {
+            const key = body.project.repo + "@" + body.project.branch + "/" + body.project.path;
+            const now = captureProgress(body.voyage, body.updatedAt);
+            const priorText = localStorage.getItem(progressPrefix + key);
+            const previous = priorText ? JSON.parse(priorText) as ProgressState : undefined;
+            const incoming = previous && Array.isArray(previous.rows)
+              ? diffProgress(previous, now) : [];
+            const historyText = localStorage.getItem(historyPrefix + key);
+            const existing = historyText ? JSON.parse(historyText) as ProgressChange[] : [];
+            const history = [...incoming.reverse(), ...(Array.isArray(existing) ? existing : [])].slice(0, 30);
+            localStorage.setItem(progressPrefix + key, JSON.stringify(now));
+            localStorage.setItem(historyPrefix + key, JSON.stringify(history));
+            setRecentChanges(history);
+          }
         } catch {
           setRecentChanges([]);
         }
