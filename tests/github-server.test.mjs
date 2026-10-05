@@ -42,7 +42,7 @@ function mockGitHub(handler) {
 }
 
 const project = { repo: "jenozu/yuzimiONLINE", branch: "main", path: "master_plan.md", name: "Yuzimi" };
-const token = "github_pat_TEST_SECRET_NEVER_RETURN";
+const token = "TEST_SERVER_READ_TOKEN_NEVER_RETURN";
 
 test("existing public repositories load without any credential", async () => {
   const mock = mockGitHub(({ url, auth }) => {
@@ -189,8 +189,8 @@ for (const [status, code] of [[401, "GITHUB_CREDENTIAL_INVALID"], [403, "PRIVATE
     } catch (error) { caught = error; }
     assert.ok(caught instanceof GitHubProjectError);
     assert.equal(caught.code, code);
-    assert.doesNotMatch(caught.message, /github_pat_TEST_SECRET_NEVER_RETURN/);
-    assert.doesNotMatch(JSON.stringify({ error: caught.message, code: caught.code }), /github_pat_TEST_SECRET_NEVER_RETURN/);
+    assert.doesNotMatch(caught.message, /TEST_SERVER_READ_TOKEN_NEVER_RETURN/);
+    assert.doesNotMatch(JSON.stringify({ error: caught.message, code: caught.code }), /TEST_SERVER_READ_TOKEN_NEVER_RETURN/);
   });
 }
 
