@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
       name: query.get("name") || undefined
     }, {
       includeActivity: query.get("activity") !== "0",
-      privateAccessAuthorized: requestHasPrivateSession(request)
+      privateAccessAuthorized: requestHasPrivateSession(request),
+      preferPrivate: query.get("private") === "1"
     });
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
