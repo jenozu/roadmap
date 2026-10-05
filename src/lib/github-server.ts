@@ -32,6 +32,19 @@ export class GitHubProjectError extends Error {
   }
 }
 
+export function safeProjectError(error: unknown): {
+  status: number;
+  body: { error: string; code: GitHubProjectErrorCode };
+} {
+  if (error instanceof GitHubProjectError) {
+    return { status: error.status, body: { error: error.message, code: error.code } };
+  }
+  return {
+    status: 502,
+    body: { error: "Unable to import this roadmap.", code: "GITHUB_UNAVAILABLE" }
+  };
+}
+
 type Environment = Record<string, string | undefined>;
 type FetchLike = typeof fetch;
 
