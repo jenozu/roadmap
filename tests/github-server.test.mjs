@@ -47,7 +47,7 @@ const token = "github_pat_TEST_SECRET_NEVER_RETURN";
 test("existing public repositories load without any credential", async () => {
   const mock = mockGitHub(({ url, auth }) => {
     assert.equal(auth, null);
-    if (url.includes("/contents/")) return json(filePayload());
+    if (url.startsWith("https://raw.githubusercontent.com/")) return new Response(MARKDOWN, { status: 200 });
     if (url.includes("/commits?")) return json([]);
     throw new Error("unexpected " + url);
   });
@@ -63,7 +63,7 @@ test("existing public repositories load without any credential", async () => {
 
 test("allowlisted private repository uses authenticated Contents and commit requests only after public lookup fails", async () => {
   const mock = mockGitHub(({ url, auth }) => {
-    if (url.includes("/contents/") && !auth) return json({ message: "Not Found" }, 404);
+    if (url.startsWith("https://raw.githubusercontent.com/") && !auth) return new Response("Not Found", { status: 404 });
     if (url.endsWith("/repos/jenozu/yuzimiONLINE") && !auth) return json({ message: "Not Found" }, 404);
     assert.equal(auth, "Bearer " + token);
     if (url.endsWith("/repos/jenozu/yuzimiONLINE")) return json({ private: true });
@@ -93,9 +93,9 @@ test("allowlisted private repository uses authenticated Contents and commit requ
 });
 
 test("private and public Markdown go through the same parser", async () => {
-  const publicMock = mockGitHub(({ url }) => url.includes("/contents/") ? json(filePayload()) : json([]));
+  const publicMock = mockGitHub(({ url }) => url.startsWith("https://raw.githubusercontent.com/") ? new Response(MARKDOWN, { status: 200 }) : json([]));
   const privateMock = mockGitHub(({ url, auth }) => {
-    if (!auth && url.includes("/contents/")) return json({}, 404);
+    if (!auth && url.startsWith("https://raw.githubusercontent.com/")) return new Response("Not Found", { status: 404 });
     if (!auth) return json({}, 404);
     if (url.includes("/contents/")) return json(filePayload());
     if (url.includes("/commits?")) return json([]);
@@ -115,9 +115,11 @@ test("private and public Markdown go through the same parser", async () => {
 });
 
 test("non-allowlisted private repository is rejected before token use", async () => {
-  const mock = mockGitHub(({ auth }) => {
+  const mock = mockGitHub(({ url, auth }) => {
     assert.equal(auth, null, "credential must never be used for a non-allowlisted repository");
-    return json({ message: "Not Found" }, 404);
+    return url.startsWith("https://raw.githubusercontent.com/")
+      ? new Response("Not Found", { status: 404 })
+      : json({ message: "Not Found" }, 404);
   });
   await assert.rejects(
     fetchProject(project, {
@@ -130,9 +132,11 @@ test("non-allowlisted private repository is rejected before token use", async ()
 });
 
 test("allowlisted private repository requires the Voyages private session before token use", async () => {
-  const mock = mockGitHub(({ auth }) => {
+  const mock = mockGitHub(({ url, auth }) => {
     assert.equal(auth, null);
-    return json({ message: "Not Found" }, 404);
+    return url.startsWith("https://raw.githubusercontent.com/")
+      ? new Response("Not Found", { status: 404 })
+      : json({ message: "Not Found" }, 404);
   });
   await assert.rejects(
     fetchProject(project, {
@@ -144,7 +148,9 @@ test("allowlisted private repository requires the Voyages private session before
 });
 
 test("missing GITHUB_READ_TOKEN returns a controlled configuration error", async () => {
-  const mock = mockGitHub(() => json({ message: "Not Found" }, 404));
+  const mock = mockGitHub(({ url }) => url.startsWith("https://raw.githubusercontent.com/")
+    ? new Response("Not Found", { status: 404 })
+    : json({ message: "Not Found" }, 404));
   await assert.rejects(
     fetchProject(project, {
       fetchImpl: mock.fetchImpl,
@@ -157,7 +163,7 @@ test("missing GITHUB_READ_TOKEN returns a controlled configuration error", async
 
 test("public repository with missing roadmap reports file not found", async () => {
   const mock = mockGitHub(({ url }) => {
-    if (url.includes("/contents/")) return json({}, 404);
+    if (url.startsWith("https://raw.githubusercontent.com/")) return new Response("Not Found", { status: 404 });
     return json({ private: false }, 200);
   });
   await assert.rejects(
@@ -169,7 +175,7 @@ test("public repository with missing roadmap reports file not found", async () =
 for (const [status, code] of [[401, "GITHUB_CREDENTIAL_INVALID"], [403, "PRIVATE_REPO_ACCESS_DENIED"], [404, "REPOSITORY_UNAVAILABLE"]]) {
   test("authenticated repository metadata handles GitHub " + status + " safely", async () => {
     const mock = mockGitHub(({ url, auth }) => {
-      if (!auth && url.includes("/contents/")) return json({}, 404);
+      if (!auth && url.startsWith("https://raw.githubusercontent.com/")) return new Response("Not Found", { status: 404 });
       if (!auth) return json({}, 404);
       return json({ message: "sensitive upstream text " + token }, status);
     });
@@ -190,6 +196,7 @@ for (const [status, code] of [[401, "GITHUB_CREDENTIAL_INVALID"], [403, "PRIVATE
 
 test("authenticated 404 after repository verification is a file-not-found error", async () => {
   const mock = mockGitHub(({ url, auth }) => {
+    if (!auth && url.startsWith("https://raw.githubusercontent.com/")) return new Response("Not Found", { status: 404 });
     if (!auth) return json({}, 404);
     if (url.endsWith("/repos/jenozu/yuzimiONLINE")) return json({ private: true });
     return json({}, 404);
