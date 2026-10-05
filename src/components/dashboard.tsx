@@ -203,7 +203,12 @@ export default function Dashboard() {
       controller = new AbortController();
       try {
         const query = new URLSearchParams({
-          repo: active.repo, branch: active.branch, path: active.path, name: active.name, activity: "0"
+          repo: active.repo,
+          branch: active.branch,
+          path: active.path,
+          name: active.name,
+          activity: "0",
+          private: snapshot?.repositoryVisibility === "private" ? "1" : "0"
         });
         const response = await fetch("/api/project?" + query.toString(), { cache: "no-store", signal: controller.signal });
         if (!response.ok || cancelled) return;
@@ -220,7 +225,7 @@ export default function Dashboard() {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [active.repo, active.branch, active.path, active.name, fleetReady, projects.length]);
+  }, [active.repo, active.branch, active.path, active.name, fleetReady, projects.length, snapshot?.repositoryVisibility]);
 
   const islands = snapshot?.voyage.islands || [];
   const current = islands.find(i => i.tasks.length > 0 && i.progress < 100)?.number ?? islands[islands.length - 1]?.number ?? -1;
