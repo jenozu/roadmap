@@ -21,13 +21,14 @@ export type GitHubProjectErrorCode =
   | "INVALID_GITHUB_RESPONSE";
 
 export class GitHubProjectError extends Error {
-  constructor(
-    public readonly code: GitHubProjectErrorCode,
-    message: string,
-    public readonly status: number
-  ) {
+  public readonly code: GitHubProjectErrorCode;
+  public readonly status: number;
+
+  constructor(code: GitHubProjectErrorCode, message: string, status: number) {
     super(message);
     this.name = "GitHubProjectError";
+    this.code = code;
+    this.status = status;
   }
 }
 
