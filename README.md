@@ -64,6 +64,21 @@ Do not grant Issues, Pull requests, Administration, Actions, or any write permis
 
 A GitHub App can provide shorter-lived installation tokens and is a good future upgrade if Voyages becomes multi-user or manages many repositories. For one owner and a small selected repository set, a fine-grained PAT is substantially simpler while still supporting least privilege.
 
+### Creating the fine-grained GitHub token
+
+In GitHub:
+
+1. Open **Settings → Developer settings → Personal access tokens → Fine-grained tokens**.
+2. Choose **Generate new token**.
+3. Select your GitHub account as the resource owner.
+4. Set **Repository access** to **Only select repositories**.
+5. Select only the private repositories Voyages should read, starting with `jenozu/yuzimiONLINE`.
+6. Under **Repository permissions**, set **Contents** to **Read-only**. Leave every other optional permission at **No access**. Metadata remains read-only automatically.
+7. Give the token a reasonable expiration date and create it.
+8. Copy the token directly into Vercel's `GITHUB_READ_TOKEN` environment variable. Do not paste it into Voyages, source code, chat logs, screenshots, or any `NEXT_PUBLIC_*` variable.
+
+If you later authorize another private repository, update both the token's selected repository access in GitHub **and** the Voyages allowlist in Vercel.
+
 ### Environment variables
 
 Copy the names from `.env.example`:
