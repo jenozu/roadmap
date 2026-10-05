@@ -226,3 +226,21 @@ test("invalid repo branch and path input is rejected before any request", async 
   }
   assert.equal(called, false);
 });
+
+test("preferred private polling never performs an unauthenticated repository probe", async () => {
+  const mock = mockGitHub(({ url, auth }) => {
+    assert.equal(auth, "Bearer " + token);
+    if (url.includes("/contents/")) return json(filePayload());
+    if (url.includes("/commits?")) return json([]);
+    throw new Error("unexpected " + url);
+  });
+  const result=await fetchProject(project,{
+    fetchImpl:mock.fetchImpl,
+    env:{GITHUB_READ_TOKEN:token,GITHUB_PRIVATE_REPO_ALLOWLIST:project.repo},
+    privateAccessAuthorized:true,
+    preferPrivate:true,
+    includeActivity:false
+  });
+  assert.equal(result.repositoryVisibility,"private");
+  assert.ok(mock.calls.every(call=>call.auth==="Bearer "+token));
+});
