@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   fetchProject,
-  GitHubProjectError
+  GitHubProjectError,
+  safeProjectError
 } from "../src/lib/github-server.ts";
 
 const MARKDOWN = [
@@ -190,7 +191,8 @@ for (const [status, code] of [[401, "GITHUB_CREDENTIAL_INVALID"], [403, "PRIVATE
     assert.ok(caught instanceof GitHubProjectError);
     assert.equal(caught.code, code);
     assert.doesNotMatch(caught.message, /TEST_SERVER_READ_TOKEN_NEVER_RETURN/);
-    assert.doesNotMatch(JSON.stringify({ error: caught.message, code: caught.code }), /TEST_SERVER_READ_TOKEN_NEVER_RETURN/);
+    const serialized=safeProjectError(caught);
+    assert.doesNotMatch(JSON.stringify(serialized), /TEST_SERVER_READ_TOKEN_NEVER_RETURN/);
   });
 }
 
@@ -243,4 +245,12 @@ test("preferred private polling never performs an unauthenticated repository pro
   });
   assert.equal(result.repositoryVisibility,"private");
   assert.ok(mock.calls.every(call=>call.auth==="Bearer "+token));
+});
+
+test("unknown server failures serialize to a generic response", () => {
+  const serialized=safeProjectError(new Error("upstream secret TEST_SERVER_READ_TOKEN_NEVER_RETURN"));
+  assert.equal(serialized.status,502);
+  assert.equal(serialized.body.code,"GITHUB_UNAVAILABLE");
+  assert.equal(serialized.body.error,"Unable to import this roadmap.");
+  assert.doesNotMatch(JSON.stringify(serialized),/TEST_SERVER_READ_TOKEN_NEVER_RETURN/);
 });
