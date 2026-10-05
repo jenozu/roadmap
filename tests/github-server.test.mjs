@@ -53,7 +53,7 @@ test("existing public repositories load without any credential", async () => {
   });
   const result = await fetchProject(
     { repo: "jenozu/trade-alerts", branch: "main", path: "phases.md" },
-    { fetchImpl: mock.fetchImpl, env: {} }
+    { fetchImpl: mock.fetchImpl, env: { GITHUB_READ_TOKEN: token, GITHUB_PRIVATE_REPO_ALLOWLIST: "jenozu/trade-alerts" } }
   );
   assert.equal(result.repositoryVisibility, "public");
   assert.equal(result.voyage.islands.length, 1);
