@@ -50,7 +50,7 @@ Input validation continues to restrict repository, branch, and Markdown path syn
 
 ## Current product scope
 
-Multiple public and authorized private projects may be added locally from their owner/repo + branch + Markdown path. Local browser storage keeps only voyage selectors and visual state; it does not contain the GitHub read token. Private access uses a signed HttpOnly cookie. These settings do not sync across devices yet; persistence and signed webhooks belong in the Neon-backed phase.
+Multiple public and authorized private projects may be added locally from their owner/repo + branch + Markdown path. Local browser storage keeps voyage selectors and visual state; it does not contain the GitHub read token. Private roadmap task titles and phase content are kept out of the browser's persisted progress-history storage. Private access uses a signed HttpOnly cookie. These settings do not sync across devices yet; persistence and signed webhooks belong in the Neon-backed phase.
 
 
 ## Quest detail display
