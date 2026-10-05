@@ -37,6 +37,7 @@ type FetchLike = typeof fetch;
 export type FetchProjectOptions = {
   includeActivity?: boolean;
   privateAccessAuthorized?: boolean;
+  preferPrivate?: boolean;
   fetchImpl?: FetchLike;
   env?: Environment;
 };
@@ -241,13 +242,58 @@ export async function fetchProject(
 
   const fetchImpl = options.fetchImpl || fetch;
   const env = options.env || process.env;
-  const publicContents = await fetchPublicRoadmap(fetchImpl, project);
 
   let markdown: string;
   let visibility: RepositoryVisibility = "public";
   let token: string | undefined;
 
-  if (publicContents.response.ok && publicContents.markdown !== undefined) {
+  // Once the browser has successfully loaded a private voyage, its 10-second
+  // refreshes can skip the unauthenticated public probe. Security does not
+  // rely on this hint: allowlist + private session + server token are still
+  // mandatory before any authenticated GitHub request.
+  if (options.preferPrivate) {
+    const allowlist = privateRepoAllowlist(env);
+    if (!allowlist.has(canonicalRepo(project.repo))) {
+      throw new GitHubProjectError(
+        "PRIVATE_REPO_NOT_AUTHORIZED",
+        "This repository is not authorized for private access.",
+        403
+      );
+    }
+    if (!options.privateAccessAuthorized) {
+      throw new GitHubProjectError(
+        "PRIVATE_SESSION_REQUIRED",
+        "Unlock private Voyages access before loading an authorized private repository.",
+        401
+      );
+    }
+    token = env.GITHUB_READ_TOKEN?.trim();
+    if (!token) {
+      throw new GitHubProjectError(
+        "GITHUB_CREDENTIAL_NOT_CONFIGURED",
+        "Private GitHub access is authorized but the server read credential is not configured.",
+        503
+      );
+    }
+    const preferred = await fetchRoadmapContents(fetchImpl, project, token);
+    if (preferred.response.status === 401) {
+      throw new GitHubProjectError("GITHUB_CREDENTIAL_INVALID", "The configured GitHub read credential is invalid or expired.", 503);
+    }
+    if (preferred.response.status === 403) {
+      throw new GitHubProjectError("PRIVATE_REPO_ACCESS_DENIED", "GitHub denied access to this authorized roadmap file.", 403);
+    }
+    if (preferred.response.status === 404) {
+      throw new GitHubProjectError("FILE_NOT_FOUND", "The roadmap file or branch was not found in this authorized repository.", 404);
+    }
+    if (!preferred.response.ok || preferred.markdown === undefined) {
+      throw new GitHubProjectError("GITHUB_UNAVAILABLE", "GitHub could not load the authorized roadmap file.", 502);
+    }
+    markdown = preferred.markdown;
+    visibility = "private";
+  } else {
+    const publicContents = await fetchPublicRoadmap(fetchImpl, project);
+
+    if (publicContents.response.ok && publicContents.markdown !== undefined) {
     markdown = publicContents.markdown;
   } else if (publicContents.response.status === 404) {
     const publicRepo = await publicRepositoryExists(fetchImpl, project);
@@ -299,10 +345,11 @@ export async function fetchProject(
       throw new GitHubProjectError("GITHUB_UNAVAILABLE", "GitHub could not load the authorized roadmap file.", 502);
     }
     markdown = privateContents.markdown;
-  } else if (publicContents.response.status === 403 || publicContents.response.status === 429) {
-    throw new GitHubProjectError("GITHUB_UNAVAILABLE", "GitHub public access is temporarily unavailable. Try again shortly.", 503);
-  } else {
-    throw new GitHubProjectError("GITHUB_UNAVAILABLE", "GitHub could not load this roadmap.", 502);
+    } else if (publicContents.response.status === 403 || publicContents.response.status === 429) {
+      throw new GitHubProjectError("GITHUB_UNAVAILABLE", "GitHub public access is temporarily unavailable. Try again shortly.", 503);
+    } else {
+      throw new GitHubProjectError("GITHUB_UNAVAILABLE", "GitHub could not load this roadmap.", 502);
+    }
   }
 
   const voyage = parseRoadmap(markdown);
