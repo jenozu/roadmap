@@ -34,11 +34,23 @@ Implement the next milestone.
 
 ## Security
 
-The first release reads public repository Markdown. The server never exposes a GitHub write credential and has no unauthenticated mutation endpoint. Two-way synchronization will be added with authenticated administrator requests, server-side write credentials, pull request review, signed push webhooks and a repository allowlist. GitHub secret keys must never be committed.
+Voyages supports public repositories and explicitly authorized private repositories while remaining read-only.
+
+Public files are still fetched without a credential. If the public lookup cannot see the repository, Voyages will consider private fallback only when the exact case-insensitive `owner/repo` appears in `GITHUB_PRIVATE_REPO_ALLOWLIST`. A valid signed private-access browser session is also required before the server is allowed to use `GITHUB_READ_TOKEN`.
+
+Private files are read server-side through GitHub's Contents API:
+
+`GET /repos/{owner}/{repo}/contents/{path}?ref={branch}`
+
+The Base64 file body is decoded on the server, size-limited, and passed into the same `parseRoadmap()` pipeline as public Markdown. Recent private roadmap commits are read with the same server credential. The credential is never sent to the browser, included in errors, stored in localStorage, or exposed through a `NEXT_PUBLIC_*` variable.
+
+Use a fine-grained token selected only for the intended private repositories with **Contents: Read-only** and GitHub's automatic **Metadata: Read-only** permission. Private requests that are not allowlisted never trigger an authenticated GitHub request.
+
+Input validation continues to restrict repository, branch, and Markdown path syntax and rejects traversal or URL-like values.
 
 ## Current product scope
 
-Multiple public projects may be added locally from their owner/repo + branch + Markdown path. Local browser storage keeps the project list and individually dragged island locations. These settings do not sync across devices yet; persistence and signed webhooks belong in the Neon-backed phase.
+Multiple public and authorized private projects may be added locally from their owner/repo + branch + Markdown path. Local browser storage keeps only voyage selectors and visual state; it does not contain the GitHub read token. Private access uses a signed HttpOnly cookie. These settings do not sync across devices yet; persistence and signed webhooks belong in the Neon-backed phase.
 
 
 ## Quest detail display
@@ -64,4 +76,4 @@ Relative Markdown document links in task or section instructions point to their 
 
 ## Progress observation
 
-The live values always come from the source checkbox file, re-read every 90 seconds or manually. The dashboard also compares task identity/status across visits in this browser and records verified **status transitions detected on sync**, using phase, section and normalized task title where no explicit task ID exists. This history has detection timestamps and can miss intermediate changes between refreshes; it is not an immutable GitHub event log, and moving to Neon + signed push webhooks remains a future task.
+The live values always come from the source checkbox file, re-read every 10 seconds while the tab is visible or manually. The dashboard also compares task identity/status across visits in this browser and records verified **status transitions detected on sync**, using phase, section and normalized task title where no explicit task ID exists. This history has detection timestamps and can miss intermediate changes between refreshes; it is not an immutable GitHub event log, and moving to Neon + signed push webhooks remains a future task.
