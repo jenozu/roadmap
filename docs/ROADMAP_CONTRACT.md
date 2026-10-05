@@ -48,6 +48,24 @@ Use a fine-grained token selected only for the intended private repositories wit
 
 Input validation continues to restrict repository, branch, and Markdown path syntax and rejects traversal or URL-like values.
 
+## Private repository configuration
+
+Private support is deployment configuration, not part of a roadmap document. The required server-only variables are:
+
+```env
+GITHUB_READ_TOKEN=
+GITHUB_PRIVATE_REPO_ALLOWLIST=jenozu/yuzimiONLINE
+VOYAGES_PRIVATE_ACCESS_SECRET=
+```
+
+For `GITHUB_READ_TOKEN`, create a **fine-grained personal access token** in GitHub under **Settings → Developer settings → Personal access tokens → Fine-grained tokens**. Use **Only select repositories**, select only the private repositories that Voyages should read, and grant **Contents: Read-only**. Metadata remains read-only automatically. Do not grant write permissions.
+
+In Vercel, add all three variables under **Project Settings → Environment Variables** and redeploy. The allowlist is comma-separated and case-insensitive. Adding another private repository later requires both (a) selecting it in the fine-grained token's repository access and (b) adding its exact `owner/repo` to `GITHUB_PRIVATE_REPO_ALLOWLIST`.
+
+`VOYAGES_PRIVATE_ACCESS_SECRET` must be a separate random value of at least 24 characters. It protects allowlisted private content from being readable by arbitrary visitors to the public deployment. It is not a GitHub credential.
+
+Credential rotation: create a replacement fine-grained token with the same minimum permissions, replace `GITHUB_READ_TOKEN` in Vercel, redeploy and verify private/public loading, then revoke the old token. Rotating `VOYAGES_PRIVATE_ACCESS_SECRET` invalidates existing private-access browser sessions after redeploy.
+
 ## Current product scope
 
 Multiple public and authorized private projects may be added locally from their owner/repo + branch + Markdown path. Local browser storage keeps voyage selectors and visual state; it does not contain the GitHub read token. Private roadmap task titles and phase content are kept out of the browser's persisted progress-history storage. Private access uses a signed HttpOnly cookie. These settings do not sync across devices yet; persistence and signed webhooks belong in the Neon-backed phase.
