@@ -14,9 +14,9 @@ A quiet, hand-drawn pirate atlas that turns GitHub Markdown checklists into inte
 - Copyable task briefs to hand back to a coding assistant
 - XP/level and measured completion statistics, file-specific GitHub commit activity and a **browser-local checklist change history** captured when GitHub synchronization detects previously unchecked tasks marked complete or reopened
 - Support for multiple public repositories plus explicitly allowlisted private repositories
-- Background rechecking every 90 seconds and manual Sync button
+- Lightweight roadmap rechecking every 10 seconds while visible, plus a manual Sync button
 
-The MVP is **GitHub-to-dashboard read-only**. It refreshes every 90 seconds or on demand, not via webhooks yet. Detected checklist changes are saved in this browser with their **detection timestamps**, not attributed to arbitrary commits. Browser-local positions and task-change history are not shared across devices. Two-way edits, signed webhooks, Neon persistence and protected pull request creation remain later work.
+The MVP is **GitHub-to-dashboard read-only**. It refreshes every 10 seconds while the tab is visible or on demand, not via webhooks yet. Detected checklist changes are saved in this browser with their **detection timestamps**, not attributed to arbitrary commits. Browser-local positions and public-repository task-change history are not shared across devices. Private roadmap task content is intentionally not written to that persisted progress history. Two-way edits, signed webhooks, Neon persistence and protected pull request creation remain later work.
 
 ## Setup
 
