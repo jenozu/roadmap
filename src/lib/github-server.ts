@@ -77,6 +77,14 @@ function contentsApiUrl(project: Project): string {
   return repoApiUrl(project) + "/contents/" + encodedPath + "?ref=" + encodeURIComponent(project.branch);
 }
 
+function rawRoadmapUrl(project: Project): string {
+  const [owner, repo] = project.repo.split("/");
+  return "https://raw.githubusercontent.com/" +
+    [owner, repo].map(encodeURIComponent).join("/") + "/" +
+    project.branch.split("/").map(encodeURIComponent).join("/") + "/" +
+    project.path.split("/").map(encodeURIComponent).join("/");
+}
+
 function commitsApiUrl(project: Project): string {
   return repoApiUrl(project) + "/commits?path=" + encodeURIComponent(project.path) +
     "&sha=" + encodeURIComponent(project.branch) + "&per_page=6";
@@ -121,6 +129,29 @@ async function request(fetchImpl: FetchLike, url: string, token?: string): Promi
   } catch {
     throw new GitHubProjectError("GITHUB_UNAVAILABLE", "GitHub could not be reached. Try again shortly.", 502);
   }
+}
+
+async function fetchPublicRoadmap(fetchImpl: FetchLike, project: Project): Promise<{ response: Response; markdown?: string }> {
+  let response: Response;
+  try {
+    response = await fetchImpl(rawRoadmapUrl(project), {
+      headers: { Accept: "text/plain", "User-Agent": "voyages-roadmap" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000)
+    });
+  } catch {
+    throw new GitHubProjectError("GITHUB_UNAVAILABLE", "GitHub could not be reached. Try again shortly.", 502);
+  }
+  if (!response.ok) return { response };
+  const declaredSize = Number(response.headers.get("content-length") || 0);
+  if (declaredSize > MAX_ROADMAP_BYTES) {
+    throw new GitHubProjectError("ROADMAP_TOO_LARGE", "The roadmap exceeds the 750 KB import limit.", 413);
+  }
+  const markdown = await response.text();
+  if (Buffer.byteLength(markdown, "utf8") > MAX_ROADMAP_BYTES) {
+    throw new GitHubProjectError("ROADMAP_TOO_LARGE", "The roadmap exceeds the 750 KB import limit.", 413);
+  }
+  return { response, markdown };
 }
 
 async function publicRepositoryExists(fetchImpl: FetchLike, project: Project): Promise<boolean> {
@@ -210,7 +241,7 @@ export async function fetchProject(
 
   const fetchImpl = options.fetchImpl || fetch;
   const env = options.env || process.env;
-  const publicContents = await fetchRoadmapContents(fetchImpl, project);
+  const publicContents = await fetchPublicRoadmap(fetchImpl, project);
 
   let markdown: string;
   let visibility: RepositoryVisibility = "public";
