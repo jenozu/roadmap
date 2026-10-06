@@ -120,7 +120,7 @@ test("explicit Progress statuses complete no-checklist phases and make ACTIVE th
   assert.equal(parsed.islands[4].progress, 0);
   assert.equal(parsed.taskCount, 3);
   assert.equal(parsed.completedCount, 2);
-  assert.equal(parsed.progress, 42);
+  assert.equal(parsed.progress, 50);
 });
 
 test("same-level global completion sections do not leak checkboxes into the final milestone", () => {

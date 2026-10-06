@@ -46,6 +46,7 @@ export type Voyage = {
 const phasePattern = /^(#{1,2})\s+(?:Phase\s+|Milestone\s+|M)(\d+(?:\.\d+)?)\s*[-:—–]\s*(.+)$/i;
 const taskPattern = /^(\s*)[-*]\s+\[([xX ])\]\s+(.+)$/;
 const idPattern = /<!--\s*task:([a-z0-9_-]+)\s*-->/i;
+const globalBoundaryPattern = /^(?:completion\s+(?:standard|rule)|.*definition\s+of\s+done|production\s+readiness\b|daily\s+production\s+target\b|instructions\s+to\b|current\s+next\s+action\b)/i;
 
 export function parseRoadmap(markdown: string): Voyage {
   const lines = markdown.split(/\r?\n/);
@@ -145,10 +146,13 @@ export function parseRoadmap(markdown: string): Voyage {
 
     const heading = text.match(/^(#{1,5})\s+(.+)$/);
     if (heading) {
-      // A non-milestone heading at the same or higher level closes the
-      // milestone. This prevents global sections such as "Completion rule"
-      // or "V1 Definition of Done" from being attributed to the final island.
-      if (heading[1].length <= phaseHeadingLevel) {
+      // Higher-level headings always leave the milestone. Same-level headings
+      // can legitimately be milestone subsections in older roadmaps (for
+      // example "## Goal" under "## M1"), so only known project-wide boundary
+      // headings close a same-level milestone.
+      const headingTitle = heading[2].trim();
+      if (heading[1].length < phaseHeadingLevel ||
+          (heading[1].length === phaseHeadingLevel && globalBoundaryPattern.test(headingTitle))) {
         flushSection();
         current = undefined;
         section = undefined;
