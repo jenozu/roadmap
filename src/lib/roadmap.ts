@@ -22,6 +22,7 @@ export type Island = {
   number: number;
   name: string;
   goal: string;
+  declaredStatus?: "complete" | "active";
   sections: SectionGuide[];
   tasks: Task[];
   completed: number;
@@ -39,7 +40,7 @@ export type Voyage = {
   level: number;
 };
 
-const phasePattern = /^#{1,2}\s+(?:Phase\s+|Milestone\s+|M)(\d+(?:\.\d+)?)\s*[-:—–]\s*(.+)$/i;
+const phasePattern = /^(#{1,2})\s+(?:Phase\s+|Milestone\s+|M)(\d+(?:\.\d+)?)\s*[-:—–]\s*(.+)$/i;
 const taskPattern = /^(\s*)[-*]\s+\[([xX ])\]\s+(.+)$/;
 const idPattern = /<!--\s*task:([a-z0-9_-]+)\s*-->/i;
 
@@ -54,6 +55,8 @@ export function parseRoadmap(markdown: string): Voyage {
   let activeIndent = 0;
   let fence: string | undefined;
   let title = "New voyage";
+  let phaseHeadingLevel = 0;
+  let hasDeclaredStatuses = false;
 
   function flushSection() {
     if (section) section.notes = sectionLines.join("\n").trim();
@@ -87,10 +90,11 @@ export function parseRoadmap(markdown: string): Voyage {
     const phase = text.match(phasePattern);
     if (phase) {
       flushSection();
+      phaseHeadingLevel = phase[1].length;
       current = {
-        id: "phase-" + phase[1],
-        number: Number(phase[1]),
-        name: phase[2].trim(),
+        id: "phase-" + phase[2],
+        number: Number(phase[2]),
+        name: phase[3].trim(),
         goal: "",
         sections: [],
         tasks: [],
@@ -111,10 +115,21 @@ export function parseRoadmap(markdown: string): Voyage {
     }
     if (!current) continue;
 
-    const heading = text.match(/^#{2,5}\s+(.+)$/);
+    const heading = text.match(/^(#{1,5})\s+(.+)$/);
     if (heading) {
+      // A non-milestone heading at the same or higher level closes the
+      // milestone. This prevents global sections such as "Completion rule"
+      // or "V1 Definition of Done" from being attributed to the final island.
+      if (heading[1].length <= phaseHeadingLevel) {
+        flushSection();
+        current = undefined;
+        section = undefined;
+        goalSection = false;
+        activeTask = undefined;
+        continue;
+      }
       flushSection();
-      const nextTitle = heading[1].trim();
+      const nextTitle = heading[2].trim();
       section = {
         id: current.id + "-section-" + current.sections.length,
         title: nextTitle,
@@ -123,6 +138,20 @@ export function parseRoadmap(markdown: string): Voyage {
       };
       current.sections.push(section);
       goalSection = /^goal$/i.test(nextTitle);
+      continue;
+    }
+
+    const declared = text.match(/^(?:Progress|Status)\s*:\s*(.+)$/i);
+    if (declared) {
+      const value = declared[1].trim().toLowerCase();
+      if (/^(?:complete|completed|done)\b/.test(value)) {
+        current.declaredStatus = "complete";
+        hasDeclaredStatuses = true;
+      } else if (/^(?:active|in[- ]?progress|underway)\b/.test(value)) {
+        current.declaredStatus = "active";
+        hasDeclaredStatuses = true;
+      }
+      if (section) sectionLines.push(line);
       continue;
     }
 
@@ -176,18 +205,25 @@ export function parseRoadmap(markdown: string): Voyage {
         : [];
     }
     island.completed = island.tasks.filter(task => task.done).length;
-    island.progress = island.tasks.length ? Math.round(island.completed / island.tasks.length * 100) : 0;
-    island.xp = island.completed * 10 + (island.tasks.length > 0 && island.completed === island.tasks.length ? 150 : 0);
+    const taskProgress = island.tasks.length ? Math.round(island.completed / island.tasks.length * 100) : 0;
+    island.progress = island.declaredStatus === "complete" ? 100 : taskProgress;
+    island.xp = island.completed * 10 + (island.progress === 100 ? 150 : 0);
     completedCount += island.completed;
     taskCount += island.tasks.length;
   }
   const xp = islands.reduce((sum, island) => sum + island.xp, 0);
+  // Hybrid master plans that explicitly declare milestone status are best
+  // represented as equally weighted islands. Traditional checklist-only
+  // roadmaps retain their existing task-weighted overall completion.
+  const milestoneProgress = islands.length
+    ? Math.round(islands.reduce((sum, island) => sum + island.progress, 0) / islands.length)
+    : 0;
   return {
     title,
     islands,
     taskCount,
     completedCount,
-    progress: taskCount ? Math.round(completedCount / taskCount * 100) : 0,
+    progress: hasDeclaredStatuses ? milestoneProgress : (taskCount ? Math.round(completedCount / taskCount * 100) : 0),
     xp,
     level: Math.floor(xp / 500) + 1
   };

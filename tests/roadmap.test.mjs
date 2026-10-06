@@ -92,3 +92,66 @@ test("supports standardized milestone and nested M1.1 headings", () => {
   assert.equal(parsed.taskCount, 3);
   assert.equal(parsed.islands[0].goal, "Create working import.");
 });
+
+test("explicit Progress statuses complete no-checklist phases and make ACTIVE the current semantic phase", () => {
+  const parsed = parseRoadmap([
+    "# Hybrid project",
+    "## Phase 0 — Setup",
+    "- [ ] Confirm terms",
+    "## Phase 1 — Data",
+    "- [x] Extract",
+    "- [x] Validate",
+    "## Phase 2 — Research",
+    "Progress: COMPLETE for the initial batch.",
+    "Deliverable: research database.",
+    "## Phase 3 — Relationships",
+    "Status: DONE.",
+    "## Phase 4 — Product database",
+    "Progress: ACTIVE.",
+    "Drafting remains.",
+    "## Phase 5 — Website",
+    "Required: storefront.",
+  ].join("\n"));
+  assert.equal(parsed.islands.length, 6);
+  assert.equal(parsed.islands[2].declaredStatus, "complete");
+  assert.equal(parsed.islands[2].progress, 100);
+  assert.equal(parsed.islands[3].progress, 100);
+  assert.equal(parsed.islands[4].declaredStatus, "active");
+  assert.equal(parsed.islands[4].progress, 0);
+  assert.equal(parsed.taskCount, 3);
+  assert.equal(parsed.completedCount, 2);
+  assert.equal(parsed.progress, 42);
+});
+
+test("same-level global completion sections do not leak checkboxes into the final milestone", () => {
+  const parsed = parseRoadmap([
+    "# Product plan",
+    "## M1: Foundation",
+    "### Implementation",
+    "- [x] Build foundation",
+    "## M2: Launch",
+    "### Implementation",
+    "- [ ] Launch site",
+    "## Completion standard",
+    "- [x] Foundation exists",
+    "- [x] Documentation exists",
+  ].join("\n"));
+  assert.equal(parsed.islands.length, 2);
+  assert.equal(parsed.taskCount, 2);
+  assert.equal(parsed.completedCount, 1);
+  assert.equal(parsed.islands[1].tasks.length, 1);
+  assert.equal(parsed.islands[1].tasks[0].title, "Launch site");
+});
+
+test("top-level checklist roadmaps retain task-weighted overall progress", () => {
+  const parsed = parseRoadmap([
+    "# Checklist project",
+    "# Phase 0 — Large phase",
+    "- [x] A",
+    "- [x] B",
+    "- [x] C",
+    "# Phase 1 — Small phase",
+    "- [ ] D",
+  ].join("\n"));
+  assert.equal(parsed.progress, 75);
+});
