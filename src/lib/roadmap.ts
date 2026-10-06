@@ -33,6 +33,9 @@ export type Island = {
 export type Voyage = {
   title: string;
   islands: Island[];
+  // Checklist items in project-wide sections after the milestone sequence.
+  // They count toward repository quest totals but never belong to the final island.
+  globalTasks: Task[];
   taskCount: number;
   completedCount: number;
   progress: number;
@@ -47,6 +50,7 @@ const idPattern = /<!--\s*task:([a-z0-9_-]+)\s*-->/i;
 export function parseRoadmap(markdown: string): Voyage {
   const lines = markdown.split(/\r?\n/);
   const islands: Island[] = [];
+  const globalTasks: Task[] = [];
   let current: Island | undefined;
   let section: SectionGuide | undefined;
   let sectionLines: string[] = [];
@@ -57,6 +61,7 @@ export function parseRoadmap(markdown: string): Voyage {
   let title = "New voyage";
   let phaseHeadingLevel = 0;
   let hasDeclaredStatuses = false;
+  let seenMilestone = false;
 
   function flushSection() {
     if (section) section.notes = sectionLines.join("\n").trim();
@@ -91,6 +96,7 @@ export function parseRoadmap(markdown: string): Voyage {
     if (phase) {
       flushSection();
       phaseHeadingLevel = phase[1].length;
+      seenMilestone = true;
       current = {
         id: "phase-" + phase[2],
         number: Number(phase[2]),
@@ -113,7 +119,29 @@ export function parseRoadmap(markdown: string): Voyage {
       goalSection = false;
       continue;
     }
-    if (!current) continue;
+    if (!current) {
+      // Preserve project-wide completion/readiness checklists that follow the
+      // milestone sequence. They contribute to aggregate quest totals but are
+      // not attached to the final island.
+      if (seenMilestone) {
+        const globalTask = line.match(taskPattern);
+        if (globalTask) {
+          const raw = globalTask[3].trim();
+          const explicitId = raw.match(idPattern);
+          const label = raw.replace(idPattern, "").trim();
+          globalTasks.push({
+            id: explicitId ? explicitId[1] : "global-line-" + (i + 1),
+            title: label,
+            done: globalTask[2].toLowerCase() === "x",
+            section: "Project-wide",
+            sectionId: "project-wide",
+            line: i + 1,
+            instructions: []
+          });
+        }
+      }
+      continue;
+    }
 
     const heading = text.match(/^(#{1,5})\s+(.+)$/);
     if (heading) {
@@ -211,16 +239,21 @@ export function parseRoadmap(markdown: string): Voyage {
     completedCount += island.completed;
     taskCount += island.tasks.length;
   }
-  const xp = islands.reduce((sum, island) => sum + island.xp, 0);
+  const globalCompletedCount = globalTasks.filter(task => task.done).length;
+  completedCount += globalCompletedCount;
+  taskCount += globalTasks.length;
+  const xp = islands.reduce((sum, island) => sum + island.xp, 0) + globalCompletedCount * 10;
   // Hybrid master plans that explicitly declare milestone status are best
-  // represented as equally weighted islands. Traditional checklist-only
-  // roadmaps retain their existing task-weighted overall completion.
+  // represented as equally weighted islands. Project-wide checklists remain
+  // visible in quest totals but do not distort the island-based voyage %.
+  // Traditional checklist-only roadmaps retain task-weighted completion.
   const milestoneProgress = islands.length
     ? Math.round(islands.reduce((sum, island) => sum + island.progress, 0) / islands.length)
     : 0;
   return {
     title,
     islands,
+    globalTasks,
     taskCount,
     completedCount,
     progress: hasDeclaredStatuses ? milestoneProgress : (taskCount ? Math.round(completedCount / taskCount * 100) : 0),

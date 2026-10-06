@@ -137,10 +137,12 @@ test("same-level global completion sections do not leak checkboxes into the fina
     "- [x] Documentation exists",
   ].join("\n"));
   assert.equal(parsed.islands.length, 2);
-  assert.equal(parsed.taskCount, 2);
-  assert.equal(parsed.completedCount, 1);
+  assert.equal(parsed.taskCount, 4);
+  assert.equal(parsed.completedCount, 3);
   assert.equal(parsed.islands[1].tasks.length, 1);
   assert.equal(parsed.islands[1].tasks[0].title, "Launch site");
+  assert.equal(parsed.globalTasks.length, 2);
+  assert.deepEqual(parsed.globalTasks.map(task => task.title), ["Foundation exists", "Documentation exists"]);
 });
 
 test("top-level checklist roadmaps retain task-weighted overall progress", () => {
@@ -154,4 +156,24 @@ test("top-level checklist roadmaps retain task-weighted overall progress", () =>
     "- [ ] D",
   ].join("\n"));
   assert.equal(parsed.progress, 75);
+});
+
+test("project-wide post-milestone checklists preserve aggregate progress without becoming an island", () => {
+  const parsed = parseRoadmap([
+    "# Trading plan",
+    "# Phase 0 — Build",
+    "- [x] Core",
+    "- [ ] Validation",
+    "# Production readiness checklist",
+    "- [x] Logging",
+    "- [ ] Monitoring",
+    "# Current next action",
+    "Finish validation."
+  ].join("\n"));
+  assert.equal(parsed.islands.length, 1);
+  assert.equal(parsed.islands[0].tasks.length, 2);
+  assert.equal(parsed.globalTasks.length, 2);
+  assert.equal(parsed.taskCount, 4);
+  assert.equal(parsed.completedCount, 2);
+  assert.equal(parsed.progress, 50);
 });
