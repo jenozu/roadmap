@@ -28,8 +28,8 @@ const layoutPrefix = "voyages:archipelago-layout:v2:";
 const progressPrefix = "voyages:recorded-progress:v1:";
 const historyPrefix = "voyages:observed-task-events:v1:";
 function progressStatus(island: Island, firstOpen: number): "complete" | "current" | "charted" {
-  if (island.tasks.length && island.progress === 100) return "complete";
-  if (island.number === firstOpen) return "current";
+  if (island.progress === 100) return "complete";
+  if (island.declaredStatus === "active" || island.number === firstOpen) return "current";
   return "charted";
 }
 function timeAgo(input: string): string {
@@ -166,7 +166,8 @@ export default function Dashboard() {
           setRecentChanges([]);
         }
         setSelected(previous => body.voyage.islands.some(i => i.id === previous)
-          ? previous : (body.voyage.islands.find(i => i.progress < 100)?.id || body.voyage.islands[0]?.id || null));
+          ? previous : (body.voyage.islands.find(i => i.declaredStatus === "active")?.id ||
+            body.voyage.islands.find(i => i.progress < 100)?.id || body.voyage.islands[0]?.id || null));
         try {
           const saved = localStorage.getItem(layoutPrefix + active.repo);
           const savedPositions = saved ? JSON.parse(saved) as Record<string, Location> : {};
@@ -211,7 +212,10 @@ export default function Dashboard() {
   }, [active.repo, active.branch, active.path, active.name, fleetReady, projects.length]);
 
   const islands = snapshot?.voyage.islands || [];
-  const current = islands.find(i => i.tasks.length > 0 && i.progress < 100)?.number ?? islands[islands.length - 1]?.number ?? -1;
+  const current = islands.find(i => i.declaredStatus === "active")?.number
+    ?? islands.find(i => i.tasks.length > 0 && i.progress < 100)?.number
+    ?? islands.find(i => i.progress < 100)?.number
+    ?? islands[islands.length - 1]?.number ?? -1;
   const archipelago = useMemo(() => layoutForCount(islands.length), [islands.length]);
   const { width: mapWidth, height: mapHeight } = archipelago;
   const locations = useMemo(
@@ -682,7 +686,7 @@ export default function Dashboard() {
 
         <section className="stats-row" aria-label="Project summary">
           <div className="stat"><small>THE VOYAGE</small><strong>{snapshot?.voyage.progress ?? "—"}<span>%</span></strong><p>Overall completion</p></div>
-          <div className="stat"><small>DISCOVERED ISLANDS</small><strong>{islands.filter(i => i.tasks.length > 0 && i.progress === 100).length}<span> / {islands.length || "—"}</span></strong><p>Completed milestones</p></div>
+          <div className="stat"><small>DISCOVERED ISLANDS</small><strong>{islands.filter(i => i.progress === 100).length}<span> / {islands.length || "—"}</span></strong><p>Completed milestones</p></div>
           <div className="stat"><small>QUESTS COMPLETED</small><strong>{snapshot?.voyage.completedCount ?? "—"}<span> / {snapshot?.voyage.taskCount ?? "—"}</span></strong><p>From your repository</p></div>
           <div className="stat stat-level"><small>CAPTAIN&apos;S LEVEL</small><strong>{snapshot?.voyage.level ?? "—"}</strong><div className="level-track"><span style={{ width: currentLevelXp / 5 + "%" }} /></div><p>{currentLevelXp} / 500 XP to next level</p></div>
         </section>
@@ -701,7 +705,10 @@ export default function Dashboard() {
                 <button type="button" aria-label="Zoom in" onClick={() => changeZoom(.14)}>＋</button>
                 <button type="button" onClick={fitMap}>Whole map</button>
                 <button type="button" disabled={!islands.length} onClick={() => {
-                  const next = islands.find(island => island.tasks.length > 0 && island.progress < 100) || islands[islands.length - 1];
+                  const next = islands.find(island => island.declaredStatus === "active")
+                  || islands.find(island => island.tasks.length > 0 && island.progress < 100)
+                  || islands.find(island => island.progress < 100)
+                  || islands[islands.length - 1];
                   if (next) focusOnIsland(next.id);
                 }}>Find my ship</button>
                 <select className="island-jump" aria-label="Navigate to an island" defaultValue="" key={active.repo + islands.length}
