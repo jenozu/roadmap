@@ -35,7 +35,7 @@ export type Voyage = {
   islands: Island[];
   // Checklist items in project-wide sections after the milestone sequence.
   // They count toward repository quest totals but never belong to the final island.
-  globalTasks: Task[];
+  globalTasks?: Task[];
   taskCount: number;
   completedCount: number;
   progress: number;
