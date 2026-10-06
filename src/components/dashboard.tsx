@@ -55,6 +55,9 @@ export default function Dashboard() {
   const [snapshot, setSnapshot] = useState<ProjectSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
+  const [privateSecret, setPrivateSecret] = useState("");
+  const [unlockingPrivate, setUnlockingPrivate] = useState(false);
   const [recentChanges, setRecentChanges] = useState<ProgressChange[]>([]);
   const [copiedNotice, setCopiedNotice] = useState<{ id: string; ok: boolean } | null>(null);
   const [tick, setTick] = useState(0);
@@ -133,8 +136,12 @@ export default function Dashboard() {
       repo: active.repo, branch: active.branch, path: active.path, name: active.name
     });
     const response = await fetch("/api/project?" + query.toString(), { cache: "no-store", signal });
-    const body = await response.json() as ProjectSnapshot & { error?: string };
-    if (!response.ok) throw new Error(body.error || "Unable to load the project.");
+    const body = await response.json() as ProjectSnapshot & { error?: string; code?: string };
+    if (!response.ok) {
+      const failure = new Error(body.error || "Unable to load the project.") as Error & { code?: string };
+      failure.code = body.code;
+      throw failure;
+    }
     return body;
   }, [active.repo, active.branch, active.path, active.name]);
 
@@ -143,6 +150,7 @@ export default function Dashboard() {
     const controller = new AbortController();
     setLoading(true);
     setError("");
+    setErrorCode("");
     void load(controller.signal)
       .then(body => {
         if (controller.signal.aborted) return;
@@ -150,18 +158,24 @@ export default function Dashboard() {
         // Local history records when changes were detected, never the date
         // the associated work actually happened. GitHub is the source.
         try {
-          const key = body.project.repo + "@" + body.project.branch + "/" + body.project.path;
-          const now = captureProgress(body.voyage, body.updatedAt);
-          const priorText = localStorage.getItem(progressPrefix + key);
-          const previous = priorText ? JSON.parse(priorText) as ProgressState : undefined;
-          const incoming = previous && Array.isArray(previous.rows)
-            ? diffProgress(previous, now) : [];
-          const historyText = localStorage.getItem(historyPrefix + key);
-          const existing = historyText ? JSON.parse(historyText) as ProgressChange[] : [];
-          const history = [...incoming.reverse(), ...(Array.isArray(existing) ? existing : [])].slice(0, 30);
-          localStorage.setItem(progressPrefix + key, JSON.stringify(now));
-          localStorage.setItem(historyPrefix + key, JSON.stringify(history));
-          setRecentChanges(history);
+          if (body.repositoryVisibility === "private") {
+            // Do not persist private roadmap task titles or phase content in
+            // localStorage. Private content lives only in the active page state.
+            setRecentChanges([]);
+          } else {
+            const key = body.project.repo + "@" + body.project.branch + "/" + body.project.path;
+            const now = captureProgress(body.voyage, body.updatedAt);
+            const priorText = localStorage.getItem(progressPrefix + key);
+            const previous = priorText ? JSON.parse(priorText) as ProgressState : undefined;
+            const incoming = previous && Array.isArray(previous.rows)
+              ? diffProgress(previous, now) : [];
+            const historyText = localStorage.getItem(historyPrefix + key);
+            const existing = historyText ? JSON.parse(historyText) as ProgressChange[] : [];
+            const history = [...incoming.reverse(), ...(Array.isArray(existing) ? existing : [])].slice(0, 30);
+            localStorage.setItem(progressPrefix + key, JSON.stringify(now));
+            localStorage.setItem(historyPrefix + key, JSON.stringify(history));
+            setRecentChanges(history);
+          }
         } catch {
           setRecentChanges([]);
         }
@@ -175,7 +189,11 @@ export default function Dashboard() {
           setPositions(savedPositions);
         } catch { positionsRef.current = {}; setPositions({}); }
       })
-      .catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Import failed."); })
+      .catch(err => {
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : "Import failed.");
+        setErrorCode(typeof (err as { code?: unknown })?.code === "string" ? (err as { code: string }).code : "");
+      })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [load, tick, active.repo, fleetReady, projects.length]);
@@ -192,7 +210,12 @@ export default function Dashboard() {
       controller = new AbortController();
       try {
         const query = new URLSearchParams({
-          repo: active.repo, branch: active.branch, path: active.path, name: active.name, activity: "0"
+          repo: active.repo,
+          branch: active.branch,
+          path: active.path,
+          name: active.name,
+          activity: "0",
+          private: snapshot?.repositoryVisibility === "private" ? "1" : "0"
         });
         const response = await fetch("/api/project?" + query.toString(), { cache: "no-store", signal: controller.signal });
         if (!response.ok || cancelled) return;
@@ -209,7 +232,7 @@ export default function Dashboard() {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [active.repo, active.branch, active.path, active.name, fleetReady, projects.length]);
+  }, [active.repo, active.branch, active.path, active.name, fleetReady, projects.length, snapshot?.repositoryVisibility]);
 
   const islands = snapshot?.voyage.islands || [];
   const current = islands.find(i => i.declaredStatus === "active")?.number
@@ -355,6 +378,32 @@ export default function Dashboard() {
     observer.observe(viewport);
     return () => observer.disconnect();
   }, []);
+
+  async function unlockPrivateVoyages(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!privateSecret || unlockingPrivate) return;
+    setUnlockingPrivate(true);
+    try {
+      const response = await fetch("/api/private-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: privateSecret })
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) {
+        setError(body.error || "Private Voyages access could not be unlocked.");
+        return;
+      }
+      setPrivateSecret("");
+      setError("");
+      setErrorCode("");
+      setTick(value => value + 1);
+    } catch {
+      setError("Private Voyages access could not be unlocked.");
+    } finally {
+      setUnlockingPrivate(false);
+    }
+  }
 
   function persistProjects(next: Project[]) {
     setProjects(next);
@@ -655,7 +704,7 @@ export default function Dashboard() {
             <label>Markdown roadmap <input required placeholder="master_plan.md" value={newPath}
               onChange={event => setNewPath(event.target.value)} /></label>
             <label>Branch <input required value={newBranch} onChange={event => setNewBranch(event.target.value)} /></label>
-            <small>Public GitHub repositories only. Use the exact path to the .md file.</small>
+            <small>Public repositories and authorized private repositories are supported. Use the exact path to the .md file.</small>
             {addError && <p className="form-error" role="alert">{addError}</p>}
             <div className="fleet-form-actions">
               <button className="action-button" type="submit">{editingId ? "Save voyage" : "Add voyage"}</button>
@@ -673,11 +722,11 @@ export default function Dashboard() {
         {projects.length === 0 ? <div className="empty-fleet">
           <span className="empty-compass" aria-hidden="true">✥</span>
           <h1>Your fleet is empty</h1>
-          <p>Chart a new voyage by connecting a public GitHub repository and selecting its Markdown roadmap.</p>
+          <p>Chart a new voyage by connecting a public repository or an authorized private repository and selecting its Markdown roadmap.</p>
           <button className="action-button" type="button" onClick={beginAdding}>Add your first voyage</button>
         </div> : <>
         <header className="topbar">
-          <div><div className="eyebrow">THE CAPTAIN&apos;S TABLE / {active.repo.toUpperCase()}</div><h1>{active.name} <span className="title-flourish">✣</span></h1><p>Every finished quest brings the destination a little closer.</p></div>
+          <div><div className="eyebrow">THE CAPTAIN&apos;S TABLE / {active.repo.toUpperCase()}</div><h1>{active.name} <span className="title-flourish">✣</span>{snapshot?.repositoryVisibility === "private" && <span className="private-repo-badge">Private repository</span>}</h1><p>Every finished quest brings the destination a little closer.</p></div>
           <div className="top-actions">
             <a className="secondary-button" href={projectFileUrl} target="_blank" rel="noreferrer">View roadmap ↗</a>
             <button className="action-button" disabled={loading} onClick={() => setTick(n => n + 1)}>{loading ? "Charting..." : "↻ Sync voyage"}</button>
@@ -726,7 +775,19 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
-          {error && <div className="error-banner">Could not fetch roadmap: {error} <button onClick={() => setTick(t => t + 1)}>Retry</button></div>}
+          {error && <div className="error-banner">
+            <span>Could not fetch roadmap: {error}</span>
+            {errorCode === "PRIVATE_SESSION_REQUIRED" ? <form className="private-unlock-form" onSubmit={unlockPrivateVoyages}>
+              <label>
+                <span>Voyages private access password</span>
+                <input type="password" autoComplete="current-password" value={privateSecret}
+                  onChange={event => setPrivateSecret(event.target.value)}
+                  placeholder="Not your GitHub token" required />
+              </label>
+              <button type="submit" disabled={unlockingPrivate}>{unlockingPrivate ? "Unlocking…" : "Unlock private voyages"}</button>
+              <small>Your GitHub read token stays server-side and is never entered here.</small>
+            </form> : <button onClick={() => setTick(t => t + 1)}>Retry</button>}
+          </div>}
           {!loading && !error && snapshot && islands.length === 0 && <div className="loading-banner">
             No islands were found. Your Markdown needs headings such as <code># Phase 0 — Planning</code> or <code>## M1: Planning</code>.
           </div>}

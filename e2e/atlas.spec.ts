@@ -18,7 +18,7 @@ function projectFixture() {
   return {
     project: { id: "trade-alerts", name: "Trade Alerts", repo: "jenozu/trade-alerts", branch: "main", path: "phases.md" },
     voyage: { title: "Trading system", islands, taskCount: 26, completedCount: 21, progress: 81, xp: 360, level: 1 },
-    activity: [], updatedAt: "2026-09-24T16:00:00.000Z"
+    activity: [], updatedAt: "2026-09-24T16:00:00.000Z", repositoryVisibility: "public"
   };
 }
 
@@ -181,4 +181,32 @@ test("near-live roadmap polling advances current checkpoint after GitHub source 
   await page.waitForTimeout(10_500);
   await expect.poll(() => calls).toBeGreaterThan(1);
   await expect(page.locator(".current-task-kicker")).toHaveText("ISLAND COMPLETE");
+});
+
+test("private voyage prompts for Voyages unlock and never asks for a GitHub token", async ({ page }) => {
+  let unlocked=false;
+  await page.unroute("**/api/project?*");
+  await page.route("**/api/private-session", async route => {
+    unlocked=true;
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({unlocked:true})});
+  });
+  await page.route("**/api/project?*", async route => {
+    if (!unlocked) {
+      await route.fulfill({
+        status:401,
+        contentType:"application/json",
+        body:JSON.stringify({error:"Unlock private Voyages access before loading an authorized private repository.",code:"PRIVATE_SESSION_REQUIRED"})
+      });
+      return;
+    }
+    const fixture=projectFixture();
+    fixture.repositoryVisibility="private";
+    await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(fixture)});
+  });
+  await page.reload();
+  await expect(page.getByText("Voyages private access password")).toBeVisible();
+  await expect(page.getByPlaceholder("Not your GitHub token")).toBeVisible();
+  await page.getByPlaceholder("Not your GitHub token").fill("voyages-only-password");
+  await page.getByRole("button",{name:"Unlock private voyages"}).click();
+  await expect(page.getByText("Private repository")).toBeVisible();
 });

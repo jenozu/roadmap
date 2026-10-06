@@ -285,3 +285,11 @@
  .island-local-map{min-width:690px}
  .current-task-card{padding:20px 17px}
 }
+
+.private-repo-badge{display:inline-block;margin-left:10px;padding:4px 7px;border:1px solid #aa9a75;border-radius:10px;font:9px Arial,sans-serif;letter-spacing:.08em;vertical-align:middle;color:#6d5a37;background:#f0e7cf}
+.error-banner{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.private-unlock-form{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;width:100%;max-width:720px;margin-top:5px}
+.private-unlock-form label{display:grid;gap:4px;min-width:250px;font:10px Arial,sans-serif;color:#6e5d4a}
+.private-unlock-form input{padding:8px 9px;border:1px solid #b7aa8d;background:#fffaf0;color:#31362f}
+.private-unlock-form button{padding:8px 10px;border:1px solid #29463f;background:#29463f;color:#f2ebd8;border-radius:3px}
+.private-unlock-form small{flex-basis:100%;font:10px/1.45 Arial,sans-serif;color:#857763}
