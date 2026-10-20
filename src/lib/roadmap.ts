@@ -1,3 +1,10 @@
+export type TaskStep = {
+  id: string;
+  title: string;
+  done: boolean;
+  line: number;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -5,7 +12,13 @@ export type Task = {
   section: string;
   sectionId: string;
   line: number;
-  // Task-specific detail exists only when it is explicitly indented beneath the checkbox.
+  // Optional plain-language fields maintained in the source roadmap.
+  simple?: string;
+  why?: string;
+  doneWhen?: string;
+  // Nested checkboxes are sub-steps of this checkpoint, not separate map checkpoints.
+  steps: TaskStep[];
+  // Technical/source detail that does not belong in the simplified primary view.
   instructions: string[];
 };
 
@@ -22,6 +35,7 @@ export type Island = {
   number: number;
   name: string;
   goal: string;
+  simple?: string;
   declaredStatus?: "complete" | "active";
   sections: SectionGuide[];
   tasks: Task[];
@@ -46,6 +60,8 @@ export type Voyage = {
 const phasePattern = /^(#{1,2})\s+(?:Phase\s+|Milestone\s+|M)(\d+(?:\.\d+)?)\s*[-:—–]\s*(.+)$/i;
 const taskPattern = /^(\s*)[-*]\s+\[([xX ])\]\s+(.+)$/;
 const idPattern = /<!--\s*task:([a-z0-9_-]+)\s*-->/i;
+const stepIdPattern = /<!--\s*step:([a-z0-9_-]+)\s*-->/i;
+const plainFieldPattern = /^(?:>\s*)?(?:\*\*)?(Plain English|Simple|Why|Done when)(?:\*\*)?\s*:\s*(.+)$/i;
 const globalBoundaryPattern = /^(?:completion\s+(?:standard|rule)|.*definition\s+of\s+done|production\s+readiness\b|daily\s+production\s+target\b|instructions\s+to\b|current\s+next\s+action\b)/i;
 
 export function parseRoadmap(markdown: string): Voyage {
@@ -137,6 +153,7 @@ export function parseRoadmap(markdown: string): Voyage {
             section: "Project-wide",
             sectionId: "project-wide",
             line: i + 1,
+            steps: [],
             instructions: []
           });
         }
@@ -199,10 +216,19 @@ export function parseRoadmap(markdown: string): Voyage {
         section: section?.title || "Overview",
         sectionId: section?.id || current.id + "-intro",
         line: i + 1,
+        steps: [],
         instructions: []
       };
       if (activeTask && task[1].length > activeIndent) {
-        activeTask.instructions.push(line);
+        const stepRaw = task[3].trim();
+        const explicitStepId = stepRaw.match(stepIdPattern);
+        activeTask.steps.push({
+          id: explicitStepId ? explicitStepId[1] : activeTask.id + "-step-line-" + (i + 1),
+          title: stepRaw.replace(stepIdPattern, "").replace(idPattern, "").trim(),
+          done: task[2].toLowerCase() === "x",
+          line: i + 1
+        });
+        continue;
       }
       current.tasks.push(item);
       activeTask = item;
@@ -210,11 +236,25 @@ export function parseRoadmap(markdown: string): Voyage {
       continue;
     }
 
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    const plainField = text.match(plainFieldPattern);
+    if (activeTask && text && indent > activeIndent && plainField) {
+      const field = plainField[1].toLowerCase();
+      const value = plainField[2].trim();
+      if (field === "plain english" || field === "simple") activeTask.simple = value;
+      else if (field === "why") activeTask.why = value;
+      else if (field === "done when") activeTask.doneWhen = value;
+      continue;
+    }
+    if (!activeTask && plainField && (plainField[1].toLowerCase() === "plain english" || plainField[1].toLowerCase() === "simple")) {
+      current.simple = plainField[2].trim();
+      if (section) sectionLines.push(line);
+      continue;
+    }
     if (goalSection && text && !text.startsWith(">") && !/^[-*]\s/.test(text)) {
       current.goal = current.goal ? current.goal + " " + text : text;
     }
     if (section) sectionLines.push(line);
-    const indent = line.match(/^\s*/)?.[0].length ?? 0;
     if (activeTask && text && indent > activeIndent) {
       activeTask.instructions.push(line);
     } else if (activeTask && text && indent <= activeIndent) {

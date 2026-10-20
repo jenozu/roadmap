@@ -131,16 +131,69 @@ export default function IslandQuestMap({ island, sourceUrl, syncedAt, onBack }: 
 }
 
 function TaskFocus({ task, current, sourceUrl }: { task: Task; current: boolean; sourceUrl: string }) {
+  const currentStep = task.steps.findIndex(step => !step.done);
+  const completedSteps = task.steps.filter(step => step.done).length;
+  const simple = task.simple || task.title;
+  const nextStep = currentStep >= 0 ? task.steps[currentStep] : undefined;
+
   return <>
     <div className="current-task-kicker">{current ? "CURRENT QUEST" : task.done ? "COMPLETED QUEST" : "UPCOMING QUEST"}</div>
-    <h3>{task.title}</h3>
+    <h3>{simple}</h3>
     <div className="current-task-meta">
       <span>{task.section}</span>
       <span>{task.done ? "Completed" : current ? "In progress" : "Not started"}</span>
+      {task.steps.length > 0 && <span>{completedSteps} / {task.steps.length} steps done</span>}
     </div>
-    {task.instructions.length ? <div className="current-task-instructions">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.instructions.join("\n")}</ReactMarkdown>
-    </div> : <p className="current-task-empty">No separate step-by-step instructions are nested under this task. Open the source roadmap for its surrounding context.</p>}
+
+    {task.simple && task.simple !== task.title && <div className="technical-title">
+      <small>SOURCE TASK</small>
+      <span>{task.title}</span>
+    </div>}
+
+    {task.why && <div className="plain-section">
+      <small>WHY THIS MATTERS</small>
+      <p>{task.why}</p>
+    </div>}
+
+    <div className="next-step-card">
+      <small>DO THIS NEXT</small>
+      {task.done ? <strong>This checkpoint is complete.</strong>
+        : nextStep ? <>
+          <strong>{nextStep.title}</strong>
+          <span>Step {currentStep + 1} of {task.steps.length}</span>
+        </> : task.steps.length > 0 ? <>
+          <strong>All listed steps are finished.</strong>
+          <span>Mark the main checkpoint complete in the roadmap when its final verification is done.</span>
+        </> : <>
+          <strong>{task.simple || task.title}</strong>
+          <span>No smaller steps have been written for this checkpoint yet.</span>
+        </>}
+    </div>
+
+    {task.steps.length > 0 && <div className="simple-step-list" aria-label="Checkpoint steps">
+      <small>STEPS</small>
+      {task.steps.map((step, index) => <div key={step.id}
+        className={"simple-step " + (step.done ? "done" : index === currentStep ? "current" : "")}>
+        <span className="simple-step-mark">{step.done ? "✓" : index + 1}</span>
+        <span>{step.title}</span>
+      </div>)}
+    </div>}
+
+    {task.doneWhen && <div className="done-when-card">
+      <small>YOU'RE DONE WHEN</small>
+      <p>{task.doneWhen}</p>
+    </div>}
+
+    {task.instructions.length > 0 && <details className="technical-details">
+      <summary>Technical details</summary>
+      <div className="current-task-instructions">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.instructions.join("\n")}</ReactMarkdown>
+      </div>
+    </details>}
+
+    {!task.simple && task.steps.length === 0 && <p className="current-task-empty">
+      This older roadmap entry does not have a plain-English breakdown yet. The source task is shown above; add a Simple line and nested step checkboxes to make this view clearer.
+    </p>}
     <a className="task-source-button" href={sourceUrl + "#L" + task.line} target="_blank" rel="noreferrer">Open task in GitHub ↗</a>
   </>;
 }

@@ -177,3 +177,47 @@ test("project-wide post-milestone checklists preserve aggregate progress without
   assert.equal(parsed.completedCount, 2);
   assert.equal(parsed.progress, 50);
 });
+
+test("v2 roadmap turns nested checkboxes into substeps instead of extra map checkpoints", () => {
+  const parsed = parseRoadmap([
+    "# Project",
+    "## M1: Catalog",
+    "Progress: ACTIVE.",
+    "### Implementation",
+    "- [ ] Generate website catalog <!-- task:M1-T01 -->",
+    "  Simple: Turn our approved product data into the file the website uses.",
+    "  Why: The store cannot show products without it.",
+    "  - [x] Export approved records <!-- step:M1-T01-S01 -->",
+    "  - [ ] Clean missing names <!-- step:M1-T01-S02 -->",
+    "  - [ ] Generate products.ts <!-- step:M1-T01-S03 -->",
+    "  Done when: The website loads the products without errors.",
+    "  Technical detail: preserve the TypeScript schema.",
+    "- [ ] Connect product images <!-- task:M1-T02 -->",
+    "  Simple: Make each product show the right image."
+  ].join("\n"));
+  const island = parsed.islands[0];
+  assert.equal(island.tasks.length, 2);
+  assert.equal(parsed.taskCount, 2);
+  assert.equal(island.tasks[0].steps.length, 3);
+  assert.deepEqual(island.tasks[0].steps.map(step => step.done), [true, false, false]);
+  assert.equal(island.tasks[0].steps[0].id, "M1-T01-S01");
+  assert.equal(island.tasks[0].simple, "Turn our approved product data into the file the website uses.");
+  assert.equal(island.tasks[0].why, "The store cannot show products without it.");
+  assert.equal(island.tasks[0].doneWhen, "The website loads the products without errors.");
+  assert.match(island.tasks[0].instructions.join("\n"), /Technical detail/);
+});
+
+test("legacy indented non-checkbox instructions remain technical detail", () => {
+  const parsed = parseRoadmap([
+    "# Phase 1 — Build",
+    "- [ ] Configure deployment",
+    "  Run the production build first.",
+    "  Keep the existing environment names."
+  ].join("\n"));
+  const task = parsed.islands[0].tasks[0];
+  assert.equal(task.steps.length, 0);
+  assert.deepEqual(task.instructions, [
+    "  Run the production build first.",
+    "  Keep the existing environment names."
+  ]);
+});
