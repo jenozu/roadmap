@@ -285,3 +285,22 @@
  .island-local-map{min-width:690px}
  .current-task-card{padding:20px 17px}
 }
+
+/* Plain-English checkpoint briefing. Technical detail remains available but
+   deliberately secondary so the current action is obvious at a glance. */
+.technical-title{display:grid;gap:4px;margin:0 0 15px;padding:9px 11px;border-left:3px solid #c2b28b;background:#f4edd9}
+.technical-title small,.plain-section small,.next-step-card small,.simple-step-list>small,.done-when-card small{font:9px Arial,sans-serif;letter-spacing:.16em;color:#9b7844}
+.technical-title span{font:11px/1.45 Arial,sans-serif;color:#716c60}
+.plain-section{margin:0 0 15px}.plain-section p,.done-when-card p{font:12px/1.6 Arial,sans-serif;color:#55594f;margin:6px 0 0}
+.next-step-card{display:grid;gap:6px;margin:13px 0 17px;padding:15px;border:1px solid #a48b5d;background:#efe2bd}
+.next-step-card strong{font:18px/1.35 Georgia,"Times New Roman",serif;color:#31473f}
+.next-step-card span{font:11px/1.5 Arial,sans-serif;color:#6e695d}
+.simple-step-list{display:grid;gap:7px;margin:0 0 17px}
+.simple-step{display:grid;grid-template-columns:25px minmax(0,1fr);gap:8px;align-items:start;padding:8px 9px;border:1px solid #ddd1b5;background:#faf6e9;font:11px/1.45 Arial,sans-serif;color:#55574f}
+.simple-step-mark{display:grid;place-items:center;width:22px;height:22px;border:1px solid #9d9379;border-radius:50%;font-size:10px;font-weight:700}
+.simple-step.done{opacity:.68}.simple-step.done .simple-step-mark{background:#688068;color:#fff;border-color:#506750}
+.simple-step.current{border-color:#568092;background:#edf3ef}.simple-step.current .simple-step-mark{background:#3f7d8e;color:#fff;border-color:#3f7d8e}
+.done-when-card{margin:0 0 15px;padding:11px 12px;border-left:3px solid #668064;background:#edf0df}
+.technical-details{margin:12px 0;border-top:1px solid #e3d8bd;border-bottom:1px solid #e3d8bd}
+.technical-details summary{padding:10px 0;cursor:pointer;font:11px Arial,sans-serif;color:#716447}
+.technical-details .current-task-instructions{margin:0;border:0;padding:0 0 12px}

@@ -65,3 +65,53 @@ Relative Markdown document links in task or section instructions point to their 
 ## Progress observation
 
 The live values always come from the source checkbox file, re-read every 90 seconds or manually. The dashboard also compares task identity/status across visits in this browser and records verified **status transitions detected on sync**, using phase, section and normalized task title where no explicit task ID exists. This history has detection timestamps and can miss intermediate changes between refreshes; it is not an immutable GitHub event log, and moving to Neon + signed push webhooks remains a future task.
+
+## Recommended v2 format — plain-English checkpoints
+
+For projects maintained with an LLM, use one **top-level checkbox per checkpoint** and nested checkboxes for the exact steps inside that checkpoint. This gives Voyages three useful levels:
+
+1. **Phase / island** — the major project stage.
+2. **Checkpoint** — one meaningful piece of work on that island.
+3. **Step** — the exact next action inside the checkpoint.
+
+Use this structure:
+
+```markdown
+## M5: Product database
+
+Progress: ACTIVE.
+
+### Goal
+Create the product data the website needs.
+
+### Implementation
+
+- [ ] Generate the website product catalog <!-- task:M5-T01 -->
+  Simple: Turn the product information we already collected into one clean file the website can use.
+  Why: The storefront cannot show products until this file exists.
+  - [x] Export the current approved product records <!-- step:M5-T01-S01 -->
+  - [ ] Clean up missing names and descriptions <!-- step:M5-T01-S02 -->
+  - [ ] Generate products.ts from the cleaned data <!-- step:M5-T01-S03 -->
+  - [ ] Open the site and confirm the products appear <!-- step:M5-T01-S04 -->
+  Done when: The website loads the approved products without missing fields or errors.
+
+  Technical details:
+  - Keep the existing TypeScript product schema.
+  - Do not overwrite manually verified compatibility fields.
+
+- [ ] Connect product images <!-- task:M5-T02 -->
+  Simple: Make sure each product displays the correct image.
+  Why: Customers need to recognize the product before requesting a quote.
+  - [ ] Match image filenames to product IDs <!-- step:M5-T02-S01 -->
+  - [ ] Add fallback images for products without photography <!-- step:M5-T02-S02 -->
+  - [ ] Check the catalog and product pages <!-- step:M5-T02-S03 -->
+  Done when: Every launch product has a valid image or approved fallback.
+```
+
+Voyages treats the **top-level checkbox as the map checkpoint**. Nested checkbox items are its steps and do **not** create additional checkpoint markers. The first unchecked top-level checkpoint is the current quest; inside it, the first unchecked nested checkbox is **Do this next**.
+
+The fields `Simple:`, `Why:`, and `Done when:` are optional but strongly recommended. They are source-controlled, so the dashboard does not have to invent or guess a plain-English explanation at runtime. Coding assistants updating a roadmap should maintain these fields whenever they add or materially change a checkpoint.
+
+Any other indented Markdown remains available behind **Technical details**. This means commands, file names, implementation notes, and links can stay in the roadmap without overwhelming the primary task view.
+
+When a coding assistant finishes a step, it should change that nested checkbox from `[ ]` to `[x]` in the repository. Voyages' normal repository refresh then moves **Do this next** to the next unchecked step. When the overall checkpoint is verified, the assistant should also check the top-level task.
